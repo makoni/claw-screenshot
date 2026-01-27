@@ -1,0 +1,11 @@
+[package]
+name = "claw-screenshot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zbus = "5"
+serde = { version = "1.0", features = ["derive"] }
+async-std = { version = "1.12", features = ["attributes"] }
+urlencoding = "2"
+dirs = "4"

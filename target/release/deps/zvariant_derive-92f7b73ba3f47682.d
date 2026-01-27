@@ -1,0 +1,11 @@
+/home/mak/clawd/claw-screenshot/target/release/deps/zvariant_derive-92f7b73ba3f47682.d: /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/lib.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/dict.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/signature.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/type.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/utils.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/value.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/../README.md
+
+/home/mak/clawd/claw-screenshot/target/release/deps/libzvariant_derive-92f7b73ba3f47682.so: /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/lib.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/dict.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/signature.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/type.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/utils.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/value.rs /home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/../README.md
+
+/home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/lib.rs:
+/home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/dict.rs:
+/home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/signature.rs:
+/home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/type.rs:
+/home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/utils.rs:
+/home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/value.rs:
+/home/mak/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zvariant_derive-5.9.2/src/../README.md:
