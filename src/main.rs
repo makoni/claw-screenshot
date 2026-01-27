@@ -1,14 +1,18 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
-use zbus::blocking::Connection;
+use async_std::future::timeout;
+use async_std::prelude::StreamExt;
 use zbus::zvariant::Value;
 
-fn extract_uri_from_map(map: &std::collections::HashMap<String, Value>) -> Option<String> {
+fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
     // Portal responses vary; try common keys: "uri", or nested under "results" payloads.
     if let Some(v) = map.get("uri") {
-        if let Value::Str(s) = v { return Some(s.to_string()); }
+        if let Value::Str(s) = v {
+            return Some(s.to_string());
+        }
     }
     // Some portals return "results" -> a{sv} inside the map under "results"
     if let Some(v) = map.get("results") {
@@ -26,59 +30,60 @@ fn extract_uri_from_map(map: &std::collections::HashMap<String, Value>) -> Optio
     None
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[async_std::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut dst_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/mak"));
     dst_dir.push("clawd/screenshots");
     fs::create_dir_all(&dst_dir)?;
 
-    let conn = Connection::session()?;
+    let conn = zbus::Connection::session().await?;
 
     // Call Screenshot on the portal; this returns a request object path
-    let reply: zbus::zvariant::ObjectPath = conn.call_method(
-        Some("org.freedesktop.portal.Desktop"),
+    // Try using a Proxy to call the Screenshot method which is often simpler
+    let proxy = zbus::Proxy::new(
+        &conn,
+        "org.freedesktop.portal.Desktop",
         "/org/freedesktop/portal/desktop",
-        Some("org.freedesktop.portal.Screenshot"),
-        "Screenshot",
-        &(false, std::collections::HashMap::<&str, Value>::new()),
-    )?;
+        "org.freedesktop.portal.Screenshot",
+    )
+    .await?;
 
+    let reply: zbus::zvariant::OwnedObjectPath =
+        proxy.call("Screenshot", &("", HashMap::<&str, Value>::new())).await?;
     eprintln!("request object: {}", reply);
 
     // Wait for the Response signal on that request object
-    let start = SystemTime::now();
-    let timeout = Duration::from_secs(10);
     let mut found: Option<PathBuf> = None;
-
-    // receive_signal yields incoming signals; iterate until we find the one for our request
-    let mut signals = conn.receive_signal()?;
-    while let Some(msg) = signals.next() {
-        let msg = msg?;
-        // Filter signals by interface, member and path
-        if let Some(header) = msg.header() {
-            if header.interface().map(|i| i.as_str()) == Some("org.freedesktop.portal.Request")
-                && header.member().map(|m| m.as_str()) == Some("Response")
-                && header.path().map(|p| p.to_string()) == Some(reply.to_string())
-            {
-                eprintln!("got Response signal");
-                // Signal body is (u, a{sv})
-                let (code, map): (u32, std::collections::HashMap<String, Value>) = msg.body()?;
-                eprintln!("code={} map={:?}", code, map);
-                // Try to extract uri more robustly
-                if let Some(s) = extract_uri_from_map(&map) {
-                    let path = s.trim_start_matches("file://");
-                    let path = urlencoding::decode(path)?.into_owned();
-                    let src = PathBuf::from(path);
-                    if src.exists() {
-                        found = Some(src);
-                        break;
-                    } else {
-                        eprintln!("decoded path does not exist: {}", src.display());
-                    }
+    let wait = async {
+        let request_proxy = zbus::Proxy::new(
+            &conn,
+            "org.freedesktop.portal.Desktop",
+            reply.as_str(),
+            "org.freedesktop.portal.Request",
+        )
+        .await?;
+        let mut stream = request_proxy.receive_signal("Response").await?;
+        while let Some(msg) = stream.next().await {
+            let body = msg.body();
+            let (code, map): (u32, HashMap<String, Value>) = body.deserialize()?;
+            eprintln!("got Response signal code={} map={:?}", code, map);
+            if let Some(s) = extract_uri_from_map(&map) {
+                let path = s.trim_start_matches("file://");
+                let path = urlencoding::decode(path)?.into_owned();
+                let src = PathBuf::from(path);
+                if src.exists() {
+                    found = Some(src);
+                    break;
                 }
+                eprintln!("decoded path does not exist: {}", src.display());
             }
         }
+        Ok::<(), Box<dyn std::error::Error>>(())
+    };
 
-        if start.elapsed()? > timeout { break; }
+    match timeout(Duration::from_secs(10), wait).await {
+        Ok(result) => result?,
+        Err(_) => eprintln!("timeout waiting for Response signal"),
     }
 
     if let Some(src) = found {

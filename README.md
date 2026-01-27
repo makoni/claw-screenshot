@@ -6,6 +6,8 @@ Usage:
 - Build: cargo build --release
 - Install: cp target/release/claw-screenshot ~/.local/bin/
 - Run once to allow portal: gtk-launch claw-screenshot
+- Test (manual): timeout 20s ./target/debug/claw-screenshot
 
 Notes:
 - The project uses xdg-desktop-portal; first run will show a permission dialog in GNOME.
+- Helper integration: screenshot-helper.sh expects `SAVED:/path` on stdout.
