@@ -5,6 +5,27 @@ use std::time::{Duration, SystemTime};
 use zbus::blocking::Connection;
 use zbus::zvariant::Value;
 
+fn extract_uri_from_map(map: &std::collections::HashMap<String, Value>) -> Option<String> {
+    // Portal responses vary; try common keys: "uri", or nested under "results" payloads.
+    if let Some(v) = map.get("uri") {
+        if let Value::Str(s) = v { return Some(s.to_string()); }
+    }
+    // Some portals return "results" -> a{sv} inside the map under "results"
+    if let Some(v) = map.get("results") {
+        if let Value::Dict(d) = v {
+            // Dict is (Signature, Vec<(Value, Value)>) in zbus representation; try to parse roughly
+            // Fallback: stringify debug and search for file://
+            let s = format!("{:?}", d);
+            if let Some(idx) = s.find("file://") {
+                let tail = &s[idx..];
+                if let Some(end) = tail.find('"') { return Some(tail[..end].to_string()); }
+                return Some(tail.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut dst_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/mak"));
     dst_dir.push("clawd/screenshots");
@@ -25,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Wait for the Response signal on that request object
     let start = SystemTime::now();
-    let timeout = Duration::from_secs(5);
+    let timeout = Duration::from_secs(10);
     let mut found: Option<PathBuf> = None;
 
     // receive_signal yields incoming signals; iterate until we find the one for our request
@@ -42,16 +63,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Signal body is (u, a{sv})
                 let (code, map): (u32, std::collections::HashMap<String, Value>) = msg.body()?;
                 eprintln!("code={} map={:?}", code, map);
-                // portal usually returns 'uri' in the results
-                if let Some(v) = map.get("uri") {
-                    if let Value::Str(s) = v {
-                        let path = s.trim_start_matches("file://");
-                        let path = urlencoding::decode(path)?.into_owned();
-                        let src = PathBuf::from(path);
-                        if src.exists() {
-                            found = Some(src);
-                            break;
-                        }
+                // Try to extract uri more robustly
+                if let Some(s) = extract_uri_from_map(&map) {
+                    let path = s.trim_start_matches("file://");
+                    let path = urlencoding::decode(path)?.into_owned();
+                    let src = PathBuf::from(path);
+                    if src.exists() {
+                        found = Some(src);
+                        break;
+                    } else {
+                        eprintln!("decoded path does not exist: {}", src.display());
                     }
                 }
             }
