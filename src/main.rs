@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use async_std::future::timeout;
 use async_std::prelude::StreamExt;
+use log::{error, info};
 use zbus::zvariant::Value;
 
 fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
@@ -79,8 +80,16 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
 }
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut dst_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/mak"));
-    dst_dir.push("clawd/screenshots");
+    // initialize logging (use RUST_LOG to control level, e.g. RUST_LOG=info)
+    let _ = env_logger::try_init();
+
+    // Destination directory can be configured via environment variable CLAW_SCREENSHOT_DIR
+    // Default: ~/clawd/screenshots
+    let dst_dir = std::env::var("CLAW_SCREENSHOT_DIR").map(PathBuf::from).unwrap_or_else(|_| {
+        let mut p = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/mak"));
+        p.push("clawd/screenshots");
+        p
+    });
     fs::create_dir_all(&dst_dir)?;
 
     let conn = zbus::Connection::session().await?;
@@ -98,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reply: zbus::zvariant::OwnedObjectPath = proxy
         .call("Screenshot", &("", HashMap::<&str, Value>::new()))
         .await?;
-    eprintln!("request object: {}", reply);
+    info!("request object: {}", reply);
 
     // Wait for the Response signal on that request object
     let mut found: Option<PathBuf> = None;
@@ -114,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(msg) = stream.next().await {
             let body = msg.body();
             let (code, map): (u32, HashMap<String, Value>) = body.deserialize()?;
-            eprintln!("got Response signal code={} map={:?}", code, map);
+            info!("got Response signal code={} map={:?}", code, map);
             if let Some(s) = extract_uri_from_map(&map) {
                 let path = s.trim_start_matches("file://");
                 let path = urlencoding::decode(path)?.into_owned();
@@ -123,7 +132,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     found = Some(src);
                     break;
                 }
-                eprintln!("decoded path does not exist: {}", src.display());
+                info!("decoded path does not exist: {}", src.display());
             }
         }
         Ok::<(), Box<dyn std::error::Error>>(())
@@ -131,7 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match timeout(Duration::from_secs(10), wait).await {
         Ok(result) => result?,
-        Err(_) => eprintln!("timeout waiting for Response signal"),
+        Err(_) => error!("timeout waiting for Response signal"),
     }
 
     if let Some(src) = found {
@@ -141,6 +150,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut dst = dst_dir.clone();
         dst.push(filename);
         fs::copy(&src, &dst)?;
+        info!("SAVED:{}", dst.display());
         println!("SAVED:{}", dst.display());
         return Ok(());
     }
