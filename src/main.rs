@@ -13,18 +13,16 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
         return Some(s.to_string());
     }
     // Some portals return "results" -> a{sv} inside the map under "results"
-    if let Some(v) = map.get("results") {
-        if let Value::Dict(d) = v {
-            // Dict is (Signature, Vec<(Value, Value)>) in zbus representation; try to parse roughly
-            // Fallback: stringify debug and search for file://
-            let s = format!("{:?}", d);
-            if let Some(idx) = s.find("file://") {
-                let tail = &s[idx..];
-                if let Some(end) = tail.find('"') {
-                    return Some(tail[..end].to_string());
-                }
-                return Some(tail.to_string());
+    if let Some(Value::Dict(d)) = map.get("results") {
+        // Dict is (Signature, Vec<(Value, Value)>) in zbus representation; try to parse roughly
+        // Fallback: stringify debug and search for file://
+        let s = format!("{:?}", d);
+        if let Some(idx) = s.find("file://") {
+            let tail = &s[idx..];
+            if let Some(end) = tail.find('"') {
+                return Some(tail[..end].to_string());
             }
+            return Some(tail.to_string());
         }
     }
     None
