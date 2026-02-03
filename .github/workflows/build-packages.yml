@@ -28,7 +28,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          # If a tag was provided, attempt to checkout refs/tags/<tag>; otherwise fall back to the workflow ref (branch/run ref)
+          ref: ${{ inputs.tag != '' && format('refs/tags/{0}', inputs.tag) || github.ref }}
 
       - name: Cache cargo registry
         uses: actions/cache@v4
