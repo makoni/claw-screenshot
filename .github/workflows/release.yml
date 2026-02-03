@@ -1,0 +1,35 @@
+name: Release (tag-trigger)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  trigger-builds:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger build-binaries workflow
+        uses: peter-evans/workflow-dispatch@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          workflow: build-binaries.yml
+          ref: ${{ github.ref }}
+      - name: Trigger build-packages workflow
+        uses: peter-evans/workflow-dispatch@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          workflow: build-packages.yml
+          ref: ${{ github.ref }}
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: "Automated release: artifacts are produced by build workflows. Download artifacts from the workflow runs attached to this tag."
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
