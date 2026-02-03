@@ -54,15 +54,15 @@ jobs:
           cp "$BIN" package_root/usr/local/bin/
           chmod 0755 package_root/usr/local/bin/claw-screenshot
           cat > package_root/usr/share/applications/claw-screenshot.desktop <<'DESK'
-[Desktop Entry]
-Type=Application
-Name=Claw Screenshot Helper
-Exec=/usr/local/bin/claw-screenshot
-Icon=utilities-terminal
-Terminal=false
-Categories=Utility;
-StartupNotify=true
-DESK
+          [Desktop Entry]
+          Type=Application
+          Name=Claw Screenshot Helper
+          Exec=/usr/local/bin/claw-screenshot
+          Icon=utilities-terminal
+          Terminal=false
+          Categories=Utility;
+          StartupNotify=true
+          DESK
 
       - name: Build .deb
         if: ${{ always() }}
