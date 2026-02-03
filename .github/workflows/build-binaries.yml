@@ -56,7 +56,7 @@ jobs:
 
       - name: Normalize binary artifact name
         run: |
-          VERSION=$(grep '^version' Cargo.toml | head -n1 | sed -E 's/version = "(.*)"//')
+          VERSION=$(awk -F '\"' '/^version/ {print $2; exit}' Cargo.toml)
           ARCH=$(echo "${{ matrix.target }}" | sed 's/-unknown.*//; s/x86_64/amd64/; s/aarch64/arm64/')
           mv release/${{ matrix.artifact }} release/claw-screenshot-${ARCH}-${VERSION}.tar.gz
           ls -l release || true

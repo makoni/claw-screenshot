@@ -54,7 +54,7 @@ jobs:
           cp "$BIN" package_root/usr/local/bin/
           chmod 0755 package_root/usr/local/bin/claw-screenshot
           # create DEBIAN/control
-          PACKAGE_RAW=$(grep '^version' Cargo.toml | head -n1 | sed -E 's/version = "(.*)"//')
+          PACKAGE_RAW=$(awk -F '"' '/^version/ {print $2; exit}' Cargo.toml)
           if echo "$PACKAGE_RAW" | grep -qE '^[0-9]'; then
             PACKAGE_VERSION="$PACKAGE_RAW"
           else
@@ -86,7 +86,7 @@ jobs:
       - name: Build .deb
         if: ${{ always() }}
         run: |
-          VERSION=$(grep '^version' Cargo.toml | head -n1 | sed -E 's/version = "(.*)"//')
+          VERSION=$(awk -F '"' '/^version/ {print $2; exit}' Cargo.toml)
           PKGNAME=claw-screenshot-${{ matrix.arch }}-${VERSION}.deb
           dpkg-deb --build package_root "$PKGNAME"
           ls -l "$PKGNAME"
@@ -101,7 +101,7 @@ jobs:
       - name: Build .rpm using fpm
         if: always()
         run: |
-          VERSION=$(grep '^version' Cargo.toml | head -n1 | sed -E 's/version = "(.*)"//')
+          VERSION=$(awk -F '"' '/^version/ {print $2; exit}' Cargo.toml)
           PKGNAME=claw-screenshot-${{ matrix.arch }}-${VERSION}.rpm
           fpm -s dir -t rpm -n claw-screenshot -v "$VERSION" --architecture ${{ matrix.arch }} \
             --description "Claw Screenshot helper" \
@@ -112,7 +112,7 @@ jobs:
       - name: Normalize package filenames
         run: |
           set -e
-          VERSION=$(grep '^version' Cargo.toml | head -n1 | sed -E 's/version = "(.*)"//')
+          VERSION=$(awk -F '"' '/^version/ {print $2; exit}' Cargo.toml)
           if ls *.deb 1> /dev/null 2>&1; then
             for f in *.deb; do mv "$f" "claw-screenshot-${{ matrix.arch }}-${VERSION}.deb"; done
           fi
