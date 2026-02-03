@@ -64,7 +64,9 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
         return Some(s.to_string());
     }
 
-    if let Some(v) = map.get("results") && let Some(u) = find_file_uri_in_value(v) {
+    if let Some(v) = map.get("results")
+        && let Some(u) = find_file_uri_in_value(v)
+    {
         return Some(u);
     }
 
