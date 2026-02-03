@@ -3,11 +3,11 @@ name: Publish Release
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: Git tag for the draft release (e.g., 0.1.0)
+      version:
+        description: Release version for the draft release (e.g., 0.1.0)
         required: true
       name:
-        description: Optional release title (defaults to the tag)
+        description: Optional release title (defaults to the version)
         required: false
       notes:
         description: Optional release notes (defaults to a placeholder)
@@ -16,14 +16,12 @@ on:
 jobs:
   build-binaries:
     uses: ./.github/workflows/build-binaries.yml
-    with:
-      tag: ${{ inputs.tag }}
+    secrets: inherit
 
   build-packages:
     needs: build-binaries
     uses: ./.github/workflows/build-packages.yml
-    with:
-      tag: ${{ inputs.tag }}
+    secrets: inherit
 
   collect-and-release:
     needs: [build-binaries, build-packages]
@@ -31,21 +29,34 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Collect artifacts from previous jobs
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: artifacts/binaries
+          github-token: ${{ secrets.RELEASES_PERSONAL_TOKEN }}
+          run-id: ${{ needs.build-binaries.outputs.run-id }}
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: artifacts/packages
+          github-token: ${{ secrets.RELEASES_PERSONAL_TOKEN }}
+          run-id: ${{ needs.build-packages.outputs.run-id }}
+
+      - name: Collect release assets
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          # copy artifacts produced by the jobs (they place files in their workspace release/ or root)
-          cp -r ${{ github.workspace }}/release release-assets/ || true
-          cp -r ${{ github.workspace }}/*.deb release-assets/ || true
-          cp -r ${{ github.workspace }}/*.rpm release-assets/ || true
-          find release-assets -type f -maxdepth 3 -print
+          find artifacts -type f -print0 | while IFS= read -r -d '' file; do
+            cp "$file" release-assets/
+          done
+          ls -al release-assets
 
       - name: Prepare release inputs
         id: release_vars
         run: |
           set -euo pipefail
-          TAG="${{ inputs.tag }}"
+          TAG="${{ inputs.version }}"
           NAME="${{ inputs.name }}"
           NOTES="${{ inputs.notes }}"
           if [ -z "$NAME" ]; then

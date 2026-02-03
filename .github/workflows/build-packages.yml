@@ -3,16 +3,17 @@ name: Build .deb and .rpm packages (manual)
 on:
   workflow_dispatch:
   workflow_call:
-    inputs:
-      tag:
-        description: 'Optional tag/ref to build against (e.g. v0.1.0). If empty, use current checkout.'
-        required: false
-        type: string
+    outputs:
+      run-id:
+        description: GitHub run id that produced the package artifacts
+        value: ${{ jobs.pack.outputs.run-id }}
 
 jobs:
   pack:
     name: Build packages for ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
+    outputs:
+      run-id: ${{ steps.expose-run-id.outputs.run_id }}
     strategy:
       matrix:
         include:
@@ -27,9 +28,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          # If a tag was provided, attempt to checkout refs/tags/<tag>; otherwise fall back to the workflow ref (branch/run ref)
-          ref: ${{ inputs.tag != '' && format('refs/tags/{0}', inputs.tag) || github.ref }}
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -179,3 +177,7 @@ jobs:
 
       - name: Show produced files
         run: ls -l || true
+
+      - name: Expose workflow run id
+        id: expose-run-id
+        run: echo "run_id=$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"
