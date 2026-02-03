@@ -103,13 +103,32 @@ jobs:
             -C package_root usr/local/bin/claw-screenshot usr/share/applications/claw-screenshot.desktop
           ls -l *.rpm || true
 
-      - name: Upload artifacts
+      - name: Normalize package filenames
+        run: |
+          set -e
+          VERSION=$(git describe --tags --always --dirty)
+          if ls *.deb 1> /dev/null 2>&1; then
+            for f in *.deb; do mv "$f" "claw-screenshot-${{ matrix.arch }}-${VERSION}.deb"; done
+          fi
+          if ls *.rpm 1> /dev/null 2>&1; then
+            for f in *.rpm; do mv "$f" "claw-screenshot-${{ matrix.arch }}-${VERSION}.rpm"; done
+          fi
+          ls -l || true
+
+      - name: Upload .deb artifact (if present)
+        if: ${{ always() && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) }}
         uses: actions/upload-artifact@v4
         with:
-          name: packages-${{ matrix.name }}
-          path: |
-            *.deb
-            *.rpm
+          name: claw-screenshot-${{ matrix.arch }}.deb
+          path: claw-screenshot-${{ matrix.arch }}-*.deb
+          retention-days: 30
+
+      - name: Upload .rpm artifact (if present)
+        if: ${{ always() && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: claw-screenshot-${{ matrix.arch }}.rpm
+          path: claw-screenshot-${{ matrix.arch }}-*.rpm
           retention-days: 30
 
       - name: Show produced files
