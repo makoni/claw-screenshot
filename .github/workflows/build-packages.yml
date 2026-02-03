@@ -65,7 +65,7 @@ StartupNotify=true
 DESK
 
       - name: Build .deb
-        if: always()
+        if: ${{ always() }}
         run: |
           VERSION=$(git describe --tags --always --dirty)
           PKGNAME=claw-screenshot-${{ matrix.arch }}-${VERSION}.deb
@@ -73,7 +73,7 @@ DESK
           ls -l "$PKGNAME"
 
       - name: Install fpm dependencies
-        if: always()
+        if: ${{ always() }}
         run: |
           sudo apt-get update -y
           sudo apt-get install -y ruby ruby-dev build-essential
