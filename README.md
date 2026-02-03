@@ -1,10 +1,10 @@
 # Claw Screenshot
 
-A small Rust utility to take desktop screenshots via the FreeDesktop Screenshot portal and save them to `~/clawd/screenshots`.
+A small Rust utility to take desktop screenshots via the FreeDesktop Screenshot portal and save them to `~/Pictures`.
 
 ## Features
 - Requests a screenshot using `org.freedesktop.portal.Screenshot` (works with GNOME / Wayland portals).
-- Waits for the portal response and copies the temporary file into `~/clawd/screenshots`.
+- Waits for the portal response and saves the screenshot into `~/Pictures`.
 
 ## Installation
 Build from source (requires Rust toolchain):
@@ -24,7 +24,13 @@ Run the binary to request and save a screenshot. The command prints the saved pa
 ```bash
 ~/.local/bin/claw-screenshot
 # Example output:
-# SAVED:~/clawd/screenshots/Screenshot-2026-02-03-1030.png
+# Saved screenshot: /home/you/Pictures/Screenshot-2026-02-03-1030.png
+```
+
+To change the output directory, set `CLAW_SCREENSHOT_DIR` (the file is moved into that directory):
+
+```bash
+CLAW_SCREENSHOT_DIR="$HOME/Screenshots" ~/.local/bin/claw-screenshot
 ```
 
 Important: on first run the system will prompt the user to allow screenshot access for the application (portal). You must accept this prompt for screenshots to be created. If you deny access, the portal will not return a file.
@@ -101,7 +107,7 @@ Adjust `Exec` to the installed path of the binary if different. Replace `<your-u
 
 ## Notes
 - The utility uses the session D-Bus to talk to `org.freedesktop.portal.Desktop`. It works best on Wayland sessions that implement the portal interfaces.
-- The saved directory is `~/clawd/screenshots` by default. Change `dst_dir` in `src/main.rs` if you want another location.
+- The saved directory is `~/Pictures` by default or `CLAW_SCREENSHOT_DIR` if set.
 
 ## License
 MIT — Copyright (c) 2026 Sergey Armodin

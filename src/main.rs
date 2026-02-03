@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use async_std::future::timeout;
 use async_std::prelude::StreamExt;
-use log::{error, info};
+use log::{debug, error};
 use zbus::zvariant::Value;
 
 fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
@@ -78,20 +78,47 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
 
     None
 }
+
+async fn wait_for_file_ready(
+    path: &Path,
+    timeout: Duration,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let start = std::time::Instant::now();
+    let mut last_size: Option<u64> = None;
+    loop {
+        if let Ok(meta) = fs::metadata(path) {
+            let size = meta.len();
+            if size > 0 {
+                if Some(size) == last_size {
+                    return Ok(());
+                }
+                last_size = Some(size);
+            }
+        }
+        if start.elapsed() >= timeout {
+            return Err(format!("screenshot file not ready: {}", path.display()).into());
+        }
+        async_std::task::sleep(Duration::from_millis(200)).await;
+    }
+}
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // initialize logging (use RUST_LOG to control level, e.g. RUST_LOG=info)
     let _ = env_logger::try_init();
 
     // Destination directory can be configured via environment variable CLAW_SCREENSHOT_DIR
-    // Default: ~/clawd/screenshots
-    let dst_dir = std::env::var("CLAW_SCREENSHOT_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let mut p = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/mak"));
-            p.push("clawd/screenshots");
-            p
-        });
+    // Default: ~/Pictures
+    let (dst_dir, move_requested) = match std::env::var("CLAW_SCREENSHOT_DIR") {
+        Ok(dir) if !dir.trim().is_empty() => (PathBuf::from(dir), true),
+        _ => {
+            let p = dirs::picture_dir().unwrap_or_else(|| {
+                let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/mak"));
+                home.push("Pictures");
+                home
+            });
+            (p, false)
+        }
+    };
     fs::create_dir_all(&dst_dir)?;
 
     let conn = zbus::Connection::session().await?;
@@ -109,7 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reply: zbus::zvariant::OwnedObjectPath = proxy
         .call("Screenshot", &("", HashMap::<&str, Value>::new()))
         .await?;
-    info!("request object: {}", reply);
+    debug!("request object: {}", reply);
 
     // Wait for the Response signal on that request object
     let mut found: Option<PathBuf> = None;
@@ -125,16 +152,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(msg) = stream.next().await {
             let body = msg.body();
             let (code, map): (u32, HashMap<String, Value>) = body.deserialize()?;
-            info!("got Response signal code={} map={:?}", code, map);
+            debug!("got Response signal code={} map={:?}", code, map);
             if let Some(s) = extract_uri_from_map(&map) {
                 let path = s.trim_start_matches("file://");
                 let path = urlencoding::decode(path)?.into_owned();
                 let src = PathBuf::from(path);
-                if src.exists() {
-                    found = Some(src);
-                    break;
-                }
-                info!("decoded path does not exist: {}", src.display());
+                found = Some(src);
+                break;
             }
         }
         Ok::<(), Box<dyn std::error::Error>>(())
@@ -146,14 +170,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if let Some(src) = found {
+        wait_for_file_ready(&src, Duration::from_secs(10)).await?;
         let filename = src
             .file_name()
             .unwrap_or_else(|| std::ffi::OsStr::new("screenshot.png"));
         let mut dst = dst_dir.clone();
         dst.push(filename);
-        fs::copy(&src, &dst)?;
-        info!("SAVED:{}", dst.display());
-        println!("SAVED:{}", dst.display());
+        if src != dst {
+            if move_requested {
+                if let Err(err) = fs::rename(&src, &dst) {
+                    if fs::copy(&src, &dst).is_ok() {
+                        fs::remove_file(&src)?;
+                    } else {
+                        return Err(err.into());
+                    }
+                }
+            } else {
+                fs::copy(&src, &dst)?;
+            }
+        }
+        debug!("saved screenshot to {}", dst.display());
+        println!("Saved screenshot: {}", dst.display());
         return Ok(());
     }
 

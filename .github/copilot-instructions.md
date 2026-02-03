@@ -10,7 +10,7 @@
 ## High-level architecture
 - Single-binary Rust CLI (`src/main.rs`) that calls the FreeDesktop Screenshot portal over D-Bus (`org.freedesktop.portal.Screenshot`) using zbus, waits for the `Response` signal, and copies the returned temp file into a local destination directory.
 - Screenshot result parsing is centralized in `extract_uri_from_map`, which recursively scans `zbus::zvariant::Value` payloads to find a `file://` URI.
-- Destination directory defaults to `~/clawd/screenshots` and can be overridden with `CLAW_SCREENSHOT_DIR`.
+- Destination directory defaults to `~/Pictures` and can be overridden with `CLAW_SCREENSHOT_DIR`.
 
 ## Key conventions
 - Portal responses are handled via async signal stream with a 10s timeout; if no file is found, the app returns an error rather than silently succeeding.
