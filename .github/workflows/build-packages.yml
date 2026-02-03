@@ -53,6 +53,19 @@ jobs:
           BIN=target/${{ matrix.target }}/release/claw-screenshot
           cp "$BIN" package_root/usr/local/bin/
           chmod 0755 package_root/usr/local/bin/claw-screenshot
+          # create DEBIAN/control
+          cat > package_root/DEBIAN/control <<EOF
+Package: claw-screenshot
+Version: $(git describe --tags --always --dirty)
+Section: utils
+Priority: optional
+Architecture: ${{ matrix.arch }}
+Depends: 
+Maintainer: Mak Makoni <mak@example.com>
+Description: Claw Screenshot Helper
+ A small utility to request screenshots via the FreeDesktop portal and save them to ~/clawd/screenshots.
+EOF
+          # create desktop entry
           cat > package_root/usr/share/applications/claw-screenshot.desktop <<'DESK'
           [Desktop Entry]
           Type=Application
