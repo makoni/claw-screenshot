@@ -22,7 +22,9 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
             let s = format!("{:?}", d);
             if let Some(idx) = s.find("file://") {
                 let tail = &s[idx..];
-                if let Some(end) = tail.find('"') { return Some(tail[..end].to_string()); }
+                if let Some(end) = tail.find('"') {
+                    return Some(tail[..end].to_string());
+                }
                 return Some(tail.to_string());
             }
         }
@@ -48,8 +50,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
-    let reply: zbus::zvariant::OwnedObjectPath =
-        proxy.call("Screenshot", &("", HashMap::<&str, Value>::new())).await?;
+    let reply: zbus::zvariant::OwnedObjectPath = proxy
+        .call("Screenshot", &("", HashMap::<&str, Value>::new()))
+        .await?;
     eprintln!("request object: {}", reply);
 
     // Wait for the Response signal on that request object
@@ -87,7 +90,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if let Some(src) = found {
-        let filename = src.file_name().unwrap_or_else(|| std::ffi::OsStr::new("screenshot.png"));
+        let filename = src
+            .file_name()
+            .unwrap_or_else(|| std::ffi::OsStr::new("screenshot.png"));
         let mut dst = dst_dir.clone();
         dst.push(filename);
         fs::copy(&src, &dst)?;
