@@ -63,7 +63,25 @@ jobs:
             mv "release/${{ matrix.artifact }}" "$OUT"
           fi
           sha256sum "$OUT" > "$OUT.sha256" || true
-          ls -l release || true
+
+      - name: Build artifacts manifest
+        run: |
+          MANIFEST=release/artifacts-manifest.json
+          echo '{"artifacts": [' > "$MANIFEST"
+          first=1
+          for f in release/claw-screenshot-*; do
+            [ -f "$f" ] || continue
+            base=$(basename "$f")
+            sha="$(sha256sum "$f" | awk '{print $1}')"
+            if [ "$first" -eq 1 ]; then
+              first=0
+            else
+              echo ',' >> "$MANIFEST"
+            fi
+            printf '{"file":"%s","sha256":"%s"}' "$base" "$sha" >> "$MANIFEST"
+          done
+          echo ']}' >> "$MANIFEST"
+          cat "$MANIFEST"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -72,22 +90,19 @@ jobs:
           path: |
             release/claw-screenshot-*.tar.gz
             release/claw-screenshot-*.sha256
+            release/artifacts-manifest.json
           retention-days: 30
 
       - name: Show release file
         run: ls -l release || true
-      - name: Normalize binary artifact name
-        run: |
-          VERSION=$(awk -F '\"' '/^version/ {print $2; exit}' Cargo.toml)
-          ARCH=$(echo "${{ matrix.target }}" | sed 's/-unknown.*//; s/x86_64/amd64/; s/aarch64/arm64/')
-          mv release/${{ matrix.artifact }} release/claw-screenshot-${ARCH}-${VERSION}.tar.gz
-          ls -l release || true
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: claw-screenshot-${{ matrix.target }}.tar.gz
-          path: release/claw-screenshot-*.tar.gz
+          path: |
+            release/claw-screenshot-*.tar.gz
+            release/claw-screenshot-*.sha256
           retention-days: 30
 
       - name: Show release file
