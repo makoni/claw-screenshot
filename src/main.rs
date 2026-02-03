@@ -138,3 +138,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Err("no screenshot found after request".into())
 }
+
+mod tests;
