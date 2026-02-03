@@ -11,6 +11,15 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
     // Portal responses vary; try common keys: "uri", or nested under "results" payloads.
     // Use a recursive scan of zvariant::Value instead of relying on debug output.
     fn find_file_uri_in_value(v: &Value) -> Option<String> {
+        // quick debug-string fallback: some portal shapes are nested; search debug output too
+        let dbg = format!("{:?}", v);
+        if let Some(idx) = dbg.find("file://") {
+            let tail = &dbg[idx..];
+            if let Some(end) = tail.find('"') {
+                return Some(tail[..end].to_string());
+            }
+            return Some(tail.to_string());
+        }
         match v {
             Value::Str(s) => {
                 if s.starts_with("file://") || s.contains("file://") {
