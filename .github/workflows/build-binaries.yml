@@ -1,0 +1,65 @@
+name: Build release binaries (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build release for ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - name: linux-amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: claw-screenshot-linux-amd64.tar.gz
+          - name: linux-arm64
+            runner: ubuntu-22.04-arm64
+            target: aarch64-unknown-linux-gnu
+            artifact: claw-screenshot-linux-arm64.tar.gz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Add target
+        run: |
+          rustup target add ${{ matrix.target }}
+
+      - name: Build release
+        env:
+          CARGO_TARGET_DIR: target
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Package binary
+        run: |
+          mkdir -p release
+          BIN=target/${{ matrix.target }}/release/claw-screenshot
+          if [ ! -f "$BIN" ]; then echo "Binary not found: $BIN" && exit 1; fi
+          tar -czf release/${{ matrix.artifact }} -C $(dirname $BIN) $(basename $BIN)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release/${{ matrix.artifact }}
+          retention-days: 30
+
+      - name: Show release file
+        run: ls -l release || true
