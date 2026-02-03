@@ -64,10 +64,8 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
         return Some(s.to_string());
     }
 
-    if let Some(v) = map.get("results") {
-        if let Some(u) = find_file_uri_in_value(v) {
-            return Some(u);
-        }
+    if let Some(v) = map.get("results") && let Some(u) = find_file_uri_in_value(v) {
+        return Some(u);
     }
 
     for v in map.values() {
@@ -85,11 +83,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Destination directory can be configured via environment variable CLAW_SCREENSHOT_DIR
     // Default: ~/clawd/screenshots
-    let dst_dir = std::env::var("CLAW_SCREENSHOT_DIR").map(PathBuf::from).unwrap_or_else(|_| {
-        let mut p = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/mak"));
-        p.push("clawd/screenshots");
-        p
-    });
+    let dst_dir = std::env::var("CLAW_SCREENSHOT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let mut p = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/mak"));
+            p.push("clawd/screenshots");
+            p
+        });
     fs::create_dir_all(&dst_dir)?;
 
     let conn = zbus::Connection::session().await?;
