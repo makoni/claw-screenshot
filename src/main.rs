@@ -9,10 +9,8 @@ use zbus::zvariant::Value;
 
 fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
     // Portal responses vary; try common keys: "uri", or nested under "results" payloads.
-    if let Some(v) = map.get("uri") {
-        if let Value::Str(s) = v {
-            return Some(s.to_string());
-        }
+    if let Some(Value::Str(s)) = map.get("uri") {
+        return Some(s.to_string());
     }
     // Some portals return "results" -> a{sv} inside the map under "results"
     if let Some(v) = map.get("results") {
