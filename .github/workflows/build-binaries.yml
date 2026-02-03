@@ -2,6 +2,12 @@ name: Build release binaries (manual)
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Optional tag/ref to build against (e.g. v0.1.0). If empty, use current checkout.'
+        required: false
+        type: string
 
 jobs:
   build:
@@ -21,6 +27,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # if called with tag input, checkout that ref
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Cache cargo registry
         uses: actions/cache@v4

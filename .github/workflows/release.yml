@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Git tag for the draft release (e.g., v0.1.0)
+        description: Git tag for the draft release (e.g., 0.1.0)
         required: true
       name:
         description: Optional release title (defaults to the tag)
@@ -14,71 +14,32 @@ on:
         required: false
 
 jobs:
-  trigger-binaries:
-    runs-on: ubuntu-latest
-    outputs:
-      run-id: ${{ steps.dispatch.outputs.run_id }}
-    steps:
-      - name: Trigger build-binaries workflow
-        id: dispatch
-        uses: peter-evans/workflow-dispatch@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          workflow: build-binaries.yml
-          ref: ${{ inputs.tag }}
+  build-binaries:
+    uses: ./.github/workflows/build-binaries.yml
+    with:
+      tag: ${{ inputs.tag }}
 
-  trigger-packages:
-    runs-on: ubuntu-latest
-    outputs:
-      run-id: ${{ steps.dispatch.outputs.run_id }}
-    steps:
-      - name: Trigger build-packages workflow
-        id: dispatch
-        uses: peter-evans/workflow-dispatch@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          workflow: build-packages.yml
-          ref: ${{ inputs.tag }}
+  build-packages:
+    needs: build-binaries
+    uses: ./.github/workflows/build-packages.yml
+    with:
+      tag: ${{ inputs.tag }}
 
   collect-and-release:
-    needs: [trigger-binaries, trigger-packages]
+    needs: [build-binaries, build-packages]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
-      - name: Wait for triggered workflows to finish (poll)
-        id: wait
-        run: |
-          set -euo pipefail
-          BIN_RUN=${{ needs.trigger-binaries.outputs.run-id }}
-          PKG_RUN=${{ needs.trigger-packages.outputs.run-id }}
-          echo "bin_run=$BIN_RUN" >> $GITHUB_OUTPUT || true
-          echo "pkg_run=$PKG_RUN" >> $GITHUB_OUTPUT || true
-          # Note: peter-evans action may not return run-id in all versions; if missing, we will attempt to find recent runs by workflow name and tag.
-
-      - name: Download binary artifacts
-        uses: actions/download-artifact@v6
-        with:
-          path: artifacts/binaries
-          # run-id can be empty if dispatch did not provide it; in that case download latest from the workflow name (best-effort)
-          run-id: ${{ needs.trigger-binaries.outputs.run-id }}
-          github-token: ${{ secrets.RELEASES_PERSONAL_TOKEN }}
-
-      - name: Download package artifacts
-        uses: actions/download-artifact@v6
-        with:
-          path: artifacts/packages
-          run-id: ${{ needs.trigger-packages.outputs.run-id }}
-          github-token: ${{ secrets.RELEASES_PERSONAL_TOKEN }}
-
-      - name: Collect release assets
+      - name: Collect artifacts from previous jobs
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          cp -r artifacts/* release-assets/ || true
-          find release-assets -type f -maxdepth 2 -print
+          # copy artifacts produced by the jobs (they place files in their workspace release/ or root)
+          cp -r ${{ github.workspace }}/release release-assets/ || true
+          cp -r ${{ github.workspace }}/*.deb release-assets/ || true
+          cp -r ${{ github.workspace }}/*.rpm release-assets/ || true
+          find release-assets -type f -maxdepth 3 -print
 
       - name: Prepare release inputs
         id: release_vars
