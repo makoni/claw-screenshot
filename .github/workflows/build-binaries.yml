@@ -92,6 +92,7 @@ jobs:
             release/claw-screenshot-*.sha256
             release/artifacts-manifest.json
           retention-days: 30
+          overwrite: true
 
       - name: Show release file
         run: ls -l release || true
