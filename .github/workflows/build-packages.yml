@@ -54,9 +54,15 @@ jobs:
           cp "$BIN" package_root/usr/local/bin/
           chmod 0755 package_root/usr/local/bin/claw-screenshot
           # create DEBIAN/control
+          PACKAGE_RAW=$(git describe --tags --always --dirty)
+          if echo "$PACKAGE_RAW" | grep -qE '^[0-9]'; then
+            PACKAGE_VERSION="$PACKAGE_RAW"
+          else
+            PACKAGE_VERSION="1.0.0-$PACKAGE_RAW"
+          fi
           cat > package_root/DEBIAN/control <<EOF
           Package: claw-screenshot
-          Version: $(git describe --tags --always --dirty)
+          Version: $PACKAGE_VERSION
           Section: utils
           Priority: optional
           Architecture: ${{ matrix.arch }}
