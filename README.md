@@ -37,27 +37,24 @@ Important: on first run the system will prompt the user to allow screenshot acce
 
 Quick installer (recommended)
 
-If you have a release artifact and its SHA256 available, use the installer script to install the binary and create the .desktop entry.
-
-1) Download the installer and run it with the artifact URL and sha256:
+The installer auto-detects arch/OS, prefers .deb/.rpm with sudo, and falls back to a tarball in ~/.local/bin.
 
 ```bash
 # fetch script, inspect it, then run
 curl -fsSL https://raw.githubusercontent.com/makoni/claw-screenshot/main/installer/install.sh -o /tmp/install-claw.sh
 chmod +x /tmp/install-claw.sh
-# Example (replace URL and SHA with values from Release assets/artifacts-manifest.json):
-/tmp/install-claw.sh "https://github.com/makoni/claw-screenshot/some-release/downloads/claw-screenshot-amd64-1.2.3.tar.gz" "<sha256-hex>"
+
+# install latest release
+/tmp/install-claw.sh
+
+# install a specific version
+/tmp/install-claw.sh --version 0.1.0
+
+# force user-local install (skip sudo/packages)
+/tmp/install-claw.sh --user
 ```
 
-2) Alternatively, if the release contains artifacts-manifest.json, you can download it and pick the URL + SHA256 to pass to installer.
-
-```bash
-curl -fsSLO "https://github.com/makoni/claw-screenshot/releases/download/v1.2.3/artifacts-manifest.json"
-cat artifacts-manifest.json
-# then pass the chosen artifact URL and sha
-```
-
-Security note: always inspect the installer script before running it and verify the SHA256 matches the published manifest.
+Security note: always inspect the installer script before running it and ensure the release assets are from this repository.
 
 ## Allowing portal screenshots (XDG Desktop Portal)
 Some desktop portals (xdg-desktop-portal / GNOME/KDE portal backends) will only grant screenshot / window access to applications that are launched via a recognized desktop session entry. If you run the CLI directly from a terminal, the portal may deny permission and the screenshot will fail.
