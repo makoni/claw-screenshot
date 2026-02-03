@@ -14,7 +14,6 @@ fn test_uri_direct() {
 fn test_results_dict_with_pair() {
     // construct a dict like @a{sv} with a pair where value is the string
     let mut m: HashMap<String, Value> = HashMap::new();
-    // create dict Value using zvariant::Dict via Value::Dict
     use zbus::zvariant::{Dict, Value as V, Signature};
     let mut d: Dict = Dict::new(&Signature::from(s), &Signature::from(v));
     d.add(key, Value::Str(file:///tmp/s2.png)) .unwrap();
