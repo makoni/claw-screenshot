@@ -1,41 +1,108 @@
-name: Release (manual)
+name: Publish Release
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Tag name for the release (e.g. v0.1.0)'
+      tag:
+        description: Git tag for the draft release (e.g., v0.1.0)
         required: true
-        default: ''
+      name:
+        description: Optional release title (defaults to the tag)
+        required: false
+      notes:
+        description: Optional release notes (defaults to a placeholder)
+        required: false
 
 jobs:
-  trigger-builds:
+  trigger-binaries:
     runs-on: ubuntu-latest
+    outputs:
+      run-id: ${{ steps.dispatch.outputs.run_id }}
     steps:
-      - name: Create draft GitHub Release
-        uses: actions/create-release@v1
-        with:
-          tag_name: ${{ github.event.inputs.version }}
-          release_name: Release ${{ github.event.inputs.version }}
-          body: "Automated draft release: artifacts will be produced by build workflows. This release is a draft until artifacts are verified."
-          draft: true
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Trigger build-binaries workflow
+        id: dispatch
         uses: peter-evans/workflow-dispatch@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           workflow: build-binaries.yml
-          # ref can be a branch or tag; pass the provided version/tag so builds run against the same ref
-          ref: ${{ github.event.inputs.version }}
+          ref: ${{ inputs.tag }}
 
+  trigger-packages:
+    runs-on: ubuntu-latest
+    outputs:
+      run-id: ${{ steps.dispatch.outputs.run_id }}
+    steps:
       - name: Trigger build-packages workflow
+        id: dispatch
         uses: peter-evans/workflow-dispatch@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           workflow: build-packages.yml
-          ref: ${{ github.event.inputs.version }}
+          ref: ${{ inputs.tag }}
+
+  collect-and-release:
+    needs: [trigger-binaries, trigger-packages]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Wait for triggered workflows to finish (poll)
+        id: wait
+        run: |
+          set -euo pipefail
+          BIN_RUN=${{ needs.trigger-binaries.outputs.run-id }}
+          PKG_RUN=${{ needs.trigger-packages.outputs.run-id }}
+          echo "bin_run=$BIN_RUN" >> $GITHUB_OUTPUT || true
+          echo "pkg_run=$PKG_RUN" >> $GITHUB_OUTPUT || true
+          # Note: peter-evans action may not return run-id in all versions; if missing, we will attempt to find recent runs by workflow name and tag.
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: artifacts/binaries
+          # run-id can be empty if dispatch did not provide it; in that case download latest from the workflow name (best-effort)
+          run-id: ${{ needs.trigger-binaries.outputs.run-id }}
+          github-token: ${{ secrets.RELEASES_PERSONAL_TOKEN }}
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: artifacts/packages
+          run-id: ${{ needs.trigger-packages.outputs.run-id }}
+          github-token: ${{ secrets.RELEASES_PERSONAL_TOKEN }}
+
+      - name: Collect release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp -r artifacts/* release-assets/ || true
+          find release-assets -type f -maxdepth 2 -print
+
+      - name: Prepare release inputs
+        id: release_vars
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          NAME="${{ inputs.name }}"
+          NOTES="${{ inputs.notes }}"
+          if [ -z "$NAME" ]; then
+            NAME="$TAG"
+          fi
+          if [ -z "$NOTES" ]; then
+            NOTES="Release drafted automatically. Update notes before publishing."
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Draft GitHub release and attach assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_vars.outputs.tag }}
+          name: ${{ steps.release_vars.outputs.name }}
+          body: ${{ steps.release_vars.outputs.notes }}
+          draft: true
+          files: release-assets/*
+          token: ${{ secrets.RELEASES_PERSONAL_TOKEN }}
