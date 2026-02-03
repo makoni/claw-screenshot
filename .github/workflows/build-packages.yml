@@ -114,10 +114,16 @@ jobs:
           set -e
           VERSION=$(awk -F '"' '/^version/ {print $2; exit}' Cargo.toml)
           if ls *.deb 1> /dev/null 2>&1; then
-            for f in *.deb; do mv "$f" "claw-screenshot-${{ matrix.arch }}-${VERSION}.deb"; done
+            for f in *.deb; do 
+              target_name="claw-screenshot-${{ matrix.arch }}-${VERSION}.deb";
+              [ "$f" != "$target_name" ] && mv "$f" "$target_name" || true;
+            done
           fi
           if ls *.rpm 1> /dev/null 2>&1; then
-            for f in *.rpm; do mv "$f" "claw-screenshot-${{ matrix.arch }}-${VERSION}.rpm"; done
+            for f in *.rpm; do 
+              target_name="claw-screenshot-${{ matrix.arch }}-${VERSION}.rpm";
+              [ "$f" != "$target_name" ] && mv "$f" "$target_name" || true;
+            done
           fi
           ls -l || true
 
