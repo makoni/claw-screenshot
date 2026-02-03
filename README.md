@@ -7,6 +7,25 @@ A small Rust utility to take desktop screenshots via the FreeDesktop Screenshot 
 - Waits for the portal response and saves the screenshot into `~/Pictures`.
 
 ## Installation
+Installer script (recommended):
+
+```bash
+# fetch script, inspect it, then run
+curl -fsSL https://raw.githubusercontent.com/makoni/claw-screenshot/main/installer/install.sh -o /tmp/install-claw.sh
+chmod +x /tmp/install-claw.sh
+
+# install latest release
+/tmp/install-claw.sh
+
+# install a specific version
+/tmp/install-claw.sh --version 0.1.0
+
+# force user-local install (skip sudo/packages)
+/tmp/install-claw.sh --user
+```
+
+The script auto-detects arch/OS, prefers .deb/.rpm with sudo, and falls back to a tarball in ~/.local/bin. It also creates the .desktop entry.
+
 Build from source (requires Rust toolchain):
 
 ```bash
@@ -34,25 +53,6 @@ CLAW_SCREENSHOT_DIR="$HOME/Screenshots" ~/.local/bin/claw-screenshot
 ```
 
 Important: on first run the system will prompt the user to allow screenshot access for the application (portal). You must accept this prompt for screenshots to be created. If you deny access, the portal will not return a file.
-
-Quick installer (recommended)
-
-The installer auto-detects arch/OS, prefers .deb/.rpm with sudo, and falls back to a tarball in ~/.local/bin.
-
-```bash
-# fetch script, inspect it, then run
-curl -fsSL https://raw.githubusercontent.com/makoni/claw-screenshot/main/installer/install.sh -o /tmp/install-claw.sh
-chmod +x /tmp/install-claw.sh
-
-# install latest release
-/tmp/install-claw.sh
-
-# install a specific version
-/tmp/install-claw.sh --version 0.1.0
-
-# force user-local install (skip sudo/packages)
-/tmp/install-claw.sh --user
-```
 
 Security note: always inspect the installer script before running it and ensure the release assets are from this repository.
 
