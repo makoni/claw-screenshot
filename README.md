@@ -10,7 +10,7 @@ A small Rust utility to take desktop screenshots via the FreeDesktop Screenshot 
 Build from source (requires Rust toolchain):
 
 ```bash
-cd /home/mak/clawd/claw-screenshot
+cd claw-screenshot
 cargo build --release
 # install the binary
 install -m 755 target/release/claw-screenshot ~/.local/bin/
@@ -24,7 +24,7 @@ Run the binary to request and save a screenshot. The command prints the saved pa
 ```bash
 ~/.local/bin/claw-screenshot
 # Example output:
-# SAVED:/home/mak/clawd/screenshots/Screenshot-2026-02-03-1030.png
+# SAVED:~/clawd/screenshots/Screenshot-2026-02-03-1030.png
 ```
 
 Important: on first run the system will prompt the user to allow screenshot access for the application (portal). You must accept this prompt for screenshots to be created. If you deny access, the portal will not return a file.
