@@ -1,5 +1,7 @@
 # Claw Screenshot
 
+![Claw Screenshot](https://raw.githubusercontent.com/makoni/claw-screenshot/main/screenshot.png)
+
 A small Rust utility to take desktop screenshots via the FreeDesktop Screenshot portal and save them to `~/Pictures`.
 
 ## Features
