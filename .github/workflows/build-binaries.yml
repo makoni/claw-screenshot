@@ -54,11 +54,18 @@ jobs:
           if [ ! -f "$BIN" ]; then echo "Binary not found: $BIN" && exit 1; fi
           tar -czf release/${{ matrix.artifact }} -C $(dirname $BIN) $(basename $BIN)
 
-      - name: Upload artifact
+      - name: Normalize binary artifact name
+        run: |
+          VERSION=$(git describe --tags --always --dirty)
+          ARCH=$(echo "${{ matrix.target }}" | sed 's/-unknown.*//; s/x86_64/amd64/; s/aarch64/arm64/')
+          mv release/${{ matrix.artifact }} release/claw-screenshot-${ARCH}-${VERSION}.tar.gz
+          ls -l release || true
+
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: release/${{ matrix.artifact }}
+          name: claw-screenshot-${{ matrix.target }}.tar.gz
+          path: release/claw-screenshot-*.tar.gz
           retention-days: 30
 
       - name: Show release file
