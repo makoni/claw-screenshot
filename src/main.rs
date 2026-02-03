@@ -9,25 +9,65 @@ use zbus::zvariant::Value;
 
 fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
     // Portal responses vary; try common keys: "uri", or nested under "results" payloads.
+    // Use a recursive scan of zvariant::Value instead of relying on debug output.
+    fn find_file_uri_in_value(v: &Value) -> Option<String> {
+        match v {
+            Value::Str(s) => {
+                if s.starts_with("file://") || s.contains("file://") {
+                    return Some(s.to_string());
+                }
+                None
+            }
+            Value::Dict(d) => {
+                // iterate dict entries
+                for (k, val) in d.iter() {
+                    if let Some(u) = find_file_uri_in_value(k) {
+                        return Some(u);
+                    }
+                    if let Some(u) = find_file_uri_in_value(val) {
+                        return Some(u);
+                    }
+                }
+                None
+            }
+            Value::Array(a) => {
+                for item in a.inner() {
+                    if let Some(u) = find_file_uri_in_value(item) {
+                        return Some(u);
+                    }
+                }
+                None
+            }
+            Value::Structure(s) => {
+                for item in s.fields() {
+                    if let Some(u) = find_file_uri_in_value(item) {
+                        return Some(u);
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
     if let Some(Value::Str(s)) = map.get("uri") {
         return Some(s.to_string());
     }
-    // Some portals return "results" -> a{sv} inside the map under "results"
-    if let Some(Value::Dict(d)) = map.get("results") {
-        // Dict is (Signature, Vec<(Value, Value)>) in zbus representation; try to parse roughly
-        // Fallback: stringify debug and search for file://
-        let s = format!("{:?}", d);
-        if let Some(idx) = s.find("file://") {
-            let tail = &s[idx..];
-            if let Some(end) = tail.find('"') {
-                return Some(tail[..end].to_string());
-            }
-            return Some(tail.to_string());
+
+    if let Some(v) = map.get("results") {
+        if let Some(u) = find_file_uri_in_value(v) {
+            return Some(u);
         }
     }
+
+    for v in map.values() {
+        if let Some(u) = find_file_uri_in_value(v) {
+            return Some(u);
+        }
+    }
+
     None
 }
-
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut dst_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/mak"));
