@@ -160,7 +160,7 @@ install_desktop_entry() {
 Type=Application
 Name=Claw Screenshot Helper
 Exec=${bin_path}
-Icon=utilities-terminal
+Icon=claw-screenshot
 Terminal=false
 Categories=Utility;
 StartupNotify=true

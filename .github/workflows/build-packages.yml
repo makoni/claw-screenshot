@@ -84,7 +84,7 @@ jobs:
           Type=Application
           Name=Claw Screenshot Helper
           Exec=/usr/local/bin/claw-screenshot
-          Icon=utilities-terminal
+          Icon=claw-screenshot
           Terminal=false
           Categories=Utility;
           StartupNotify=true

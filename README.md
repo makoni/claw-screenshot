@@ -72,7 +72,7 @@ To ensure the screenshot helper can obtain permission reliably, create a minimal
 Type=Application
 Name=Claw Screenshot Helper
 Exec=/home/<your-user>/.local/bin/claw-screenshot
-Icon=utilities-terminal
+Icon=claw-screenshot
 Terminal=false
 Categories=Utility;
 StartupNotify=true
