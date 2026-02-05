@@ -4,6 +4,7 @@ set -euo pipefail
 OWNER="makoni"
 REPO="claw-screenshot"
 PROJECT="claw-screenshot"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat <<EOF
@@ -51,6 +52,13 @@ need_cmd tar
 need_cmd awk
 need_cmd uname
 need_cmd id
+
+PYTHON=""
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON="python"
+fi
 
 TAG=""
 VERSION_NUM=""
@@ -129,6 +137,31 @@ sha_for_asset() {
       }
     }
   }' "${TMPDIR}/manifest.json"
+}
+
+fetch_release_assets() {
+  [ -n "${PYTHON}" ] || return 1
+  [ -f "${TMPDIR}/release.json" ] && return 0
+  curl -fsSL -o "${TMPDIR}/release.json" "https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${TAG}" || return 1
+}
+
+pick_asset_from_release() {
+  local pattern="$1"
+  fetch_release_assets || return 1
+  "${PYTHON}" - <<'PY' "${pattern}" "${TMPDIR}/release.json"
+import json
+import re
+import sys
+from pathlib import Path
+
+pattern = re.compile(sys.argv[1])
+data = json.loads(Path(sys.argv[2]).read_text())
+for asset in data.get("assets", []):
+    name = asset.get("name", "")
+    if pattern.search(name):
+        print(name)
+        break
+PY
 }
 
 url_exists() {
@@ -232,39 +265,68 @@ install_tarball() {
   mkdir -p "${HOME}/.local/bin"
   install -m 0755 "${bin_path}" "${HOME}/.local/bin/${PROJECT}"
   install_desktop_entry "${HOME}/.local/bin/${PROJECT}"
+  if [ -d "${SCRIPT_DIR}/icons/hicolor" ]; then
+    mkdir -p "${HOME}/.local/share/icons/hicolor"
+    cp -a "${SCRIPT_DIR}/icons/hicolor/"* "${HOME}/.local/share/icons/hicolor/"
+  fi
   echo "Installed to ${HOME}/.local/bin/${PROJECT}"
 }
 
-if [ "${USER_ONLY}" -eq 0 ]; then
-  PKG="${PROJECT}-${ARCH}-${VERSION_NUM}.deb"
-  if [ -n "${PKG}" ]; then
-    if [ "${MANIFEST_AVAILABLE}" -eq 1 ]; then
-      SHA="$(sha_for_asset "${PKG}")"
-      if [ -n "${SHA}" ] && url_exists "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${PKG}"; then
-        if try_package_install "${PKG}" "${SHA}"; then
-          echo "Installed ${PKG} via package manager."
-          exit 0
-        fi
-      fi
-    fi
+try_package_for_arch() {
+  local kind="$1"
+  if [ "${MANIFEST_AVAILABLE}" -eq 0 ]; then
+    return 1
   fi
-  PKG="${PROJECT}-${ARCH}-${VERSION_NUM}.rpm"
-  if [ -n "${PKG}" ]; then
-    if [ "${MANIFEST_AVAILABLE}" -eq 1 ]; then
-      SHA="$(sha_for_asset "${PKG}")"
-      if [ -n "${SHA}" ] && url_exists "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${PKG}"; then
-        if try_package_install "${PKG}" "${SHA}"; then
-          echo "Installed ${PKG} via package manager."
-          exit 0
-        fi
-      fi
-    fi
+  local pkg
+  pkg="$(pick_asset "${ARCH}.*\\.${kind}$")"
+  if [ -z "${pkg}" ]; then
+    return 1
+  fi
+  local sha
+  sha="$(sha_for_asset "${pkg}")"
+  if [ -z "${sha}" ]; then
+    return 1
+  fi
+  if try_package_install "${pkg}" "${sha}"; then
+    echo "Installed ${pkg} via package manager."
+    return 0
+  fi
+  return 1
+}
+
+if [ "${USER_ONLY}" -eq 0 ]; then
+  if try_package_for_arch "deb"; then
+    exit 0
+  fi
+  if try_package_for_arch "rpm"; then
+    exit 0
   fi
 fi
 
-TARBALL="${PROJECT}-${ARCH}-${VERSION_NUM}.tar.gz"
+find_tarball_asset() {
+  local found=""
+  if [ "${MANIFEST_AVAILABLE}" -eq 1 ]; then
+    found="$(pick_asset "${ARCH}.*\\.tar\\.gz")"
+  fi
+  if [ -z "${found}" ]; then
+    found="$(pick_asset_from_release "${ARCH}.*\\.tar\\.gz")"
+  fi
+  if [ -n "${found}" ]; then
+    echo "${found}"
+  fi
+}
+
+TARBALL="$(find_tarball_asset)"
+if [ -z "${TARBALL}" ]; then
+  TARBALL="${PROJECT}-${ARCH}-${VERSION_NUM}.tar.gz"
+fi
 if ! url_exists "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${TARBALL}"; then
-  echo "No tarball found for architecture ${ARCH}" >&2
+  if [ "${VERSION}" = "latest" ] && [ "${MANIFEST_AVAILABLE}" -eq 1 ]; then
+    TARBALL="$(find_tarball_asset)"
+  fi
+fi
+if [ -z "${TARBALL}" ] || ! url_exists "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${TARBALL}"; then
+  echo "No tarball found for architecture ${ARCH} in ${TAG}" >&2
   exit 7
 fi
 TARBALL_SHA_URL="https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${TARBALL}.sha256"
