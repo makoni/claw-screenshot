@@ -10,7 +10,7 @@ usage() {
 Usage: install.sh [--version <version>] [--user]
 
 Installs ${PROJECT} from GitHub Releases.
-  --version <version>  Install a specific version (e.g. 0.1.0). Defaults to latest.
+  --version <version>  Install a specific version (e.g. 0.1.1). Defaults to latest.
   --user               Install to ~/.local/bin (skip .deb/.rpm even if available).
 EOF
 }
