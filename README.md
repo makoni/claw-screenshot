@@ -41,6 +41,19 @@ Installer examples and additional options:
 
 The script auto-detects arch/OS, prefers .deb/.rpm with sudo, and falls back to a tarball in ~/.local/bin. It also creates the .desktop entry and installs launcher icons.
 
+Uninstall script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/makoni/claw-screenshot/main/installer/uninstall.sh -o /tmp/uninstall-claw.sh
+chmod +x /tmp/uninstall-claw.sh
+
+# remove package install and user-local files
+/tmp/uninstall-claw.sh
+
+# remove only user-local files
+/tmp/uninstall-claw.sh --user
+```
+
 Build from source (requires Rust toolchain):
 
 ```bash
