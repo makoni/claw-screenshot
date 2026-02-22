@@ -23,8 +23,16 @@ jobs:
     uses: ./.github/workflows/build-packages.yml
     secrets: inherit
 
+  build-appimage:
+    uses: ./.github/workflows/appimage-ci.yml
+    secrets: inherit
+
+  build-flatpak:
+    uses: ./.github/workflows/flatpak-ci.yml
+    secrets: inherit
+
   collect-and-release:
-    needs: [build-binaries, build-packages]
+    needs: [build-binaries, build-packages, build-appimage, build-flatpak]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -42,6 +50,20 @@ jobs:
           path: artifacts/packages
           github-token: ${{ secrets.RELEASES_PERSONAL_TOKEN }}
           run-id: ${{ needs.build-packages.outputs.run-id }}
+
+      - name: Download AppImage artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: artifacts/appimage
+          github-token: ${{ secrets.RELEASES_PERSONAL_TOKEN }}
+          run-id: ${{ needs.build-appimage.outputs.run-id }}
+
+      - name: Download Flatpak artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: artifacts/flatpak
+          github-token: ${{ secrets.RELEASES_PERSONAL_TOKEN }}
+          run-id: ${{ needs.build-flatpak.outputs.run-id }}
 
       - name: Collect release assets
         run: |

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>me.spaceinbox.claw-screenshot</id>
+  <name>Claw Screenshot</name>
+  <summary>Take desktop screenshots through xdg-desktop-portal</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      Claw Screenshot requests a screenshot through the FreeDesktop portal and saves it to your Pictures folder.
+    </p>
+  </description>
+  <launchable type="desktop-id">me.spaceinbox.claw-screenshot.desktop</launchable>
+  <content_rating type="oars-1.1" />
+</component>

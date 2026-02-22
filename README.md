@@ -40,6 +40,7 @@ Installer examples and additional options:
 ```
 
 The script auto-detects arch/OS, prefers .deb/.rpm with sudo, and falls back to a tarball in ~/.local/bin. It also creates the .desktop entry and installs launcher icons.
+Release assets also include AppImage and Flatpak bundles for amd64 and arm64.
 
 Uninstall script:
 

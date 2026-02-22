@@ -1,0 +1,108 @@
+name: AppImage CI
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      run-id:
+        description: GitHub run id that produced the AppImage artifacts
+        value: ${{ jobs.build.outputs.run-id }}
+
+jobs:
+  build:
+    name: Build AppImage for ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            arch: amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            linuxdeploy_suffix: x86_64
+          - name: linux-arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            linuxdeploy_suffix: aarch64
+    outputs:
+      run-id: ${{ steps.expose-run-id.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config curl desktop-file-utils
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Get app version
+        id: get_version
+        shell: bash
+        run: |
+          version=$(awk -F '"' '/^\[package\]/{p=1} p && /^version/ {print $2; exit}' Cargo.toml)
+          [ -n "$version" ] || { echo "Could not determine version from Cargo.toml" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download linuxdeploy
+        run: |
+          set -euo pipefail
+          curl -L "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.linuxdeploy_suffix }}.AppImage" -o linuxdeploy.AppImage
+          chmod +x linuxdeploy.AppImage
+
+      - name: Build AppImage
+        run: |
+          set -euo pipefail
+          APPDIR=build/AppDir
+          BIN=target/${{ matrix.target }}/release/claw-screenshot
+          rm -rf "$APPDIR" dist
+          mkdir -p "$APPDIR/usr/bin" build dist
+          install -Dm755 "$BIN" "$APPDIR/usr/bin/claw-screenshot"
+          cat > build/claw-screenshot.desktop <<'DESK'
+          [Desktop Entry]
+          Type=Application
+          Name=Claw Screenshot
+          Exec=claw-screenshot
+          Icon=claw-screenshot
+          Terminal=false
+          Categories=Utility;
+          StartupNotify=true
+          DESK
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          ./linuxdeploy.AppImage \
+            --appdir "$APPDIR" \
+            --executable "$APPDIR/usr/bin/claw-screenshot" \
+            --desktop-file build/claw-screenshot.desktop \
+            --icon-file installer/icons/hicolor/256x256/apps/claw-screenshot.png \
+            --output appimage
+          OUT=$(ls -1 ./*.AppImage | head -n1)
+          DEST="dist/claw-screenshot-${{ steps.get_version.outputs.version }}-${{ matrix.arch }}.AppImage"
+          mv "$OUT" "$DEST"
+          sha256sum "$DEST" > "$DEST.sha256"
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claw-screenshot-${{ matrix.arch }}.appimage
+          path: |
+            dist/claw-screenshot-*.AppImage
+            dist/claw-screenshot-*.AppImage.sha256
+          retention-days: 30
+          overwrite: true
+
+      - name: Expose workflow run id
+        id: expose-run-id
+        run: echo "run_id=$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"

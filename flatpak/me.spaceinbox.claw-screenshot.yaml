@@ -1,0 +1,32 @@
+app-id: me.spaceinbox.claw-screenshot
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: claw-screenshot
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.Documents
+  - --filesystem=xdg-pictures
+modules:
+  - name: claw-screenshot
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/claw-screenshot/cargo
+    build-commands:
+      - cargo build --release --locked --offline
+      - install -Dm755 target/release/claw-screenshot /app/bin/claw-screenshot
+      - install -Dm644 flatpak/me.spaceinbox.claw-screenshot.desktop /app/share/applications/me.spaceinbox.claw-screenshot.desktop
+      - install -Dm644 flatpak/me.spaceinbox.claw-screenshot.metainfo.xml /app/share/metainfo/me.spaceinbox.claw-screenshot.metainfo.xml
+      - install -Dm644 installer/icons/hicolor/512x512/apps/claw-screenshot.png /app/share/icons/hicolor/512x512/apps/me.spaceinbox.claw-screenshot.png
+      - install -Dm644 installer/icons/hicolor/256x256/apps/claw-screenshot.png /app/share/icons/hicolor/256x256/apps/me.spaceinbox.claw-screenshot.png
+      - install -Dm644 installer/icons/hicolor/128x128/apps/claw-screenshot.png /app/share/icons/hicolor/128x128/apps/me.spaceinbox.claw-screenshot.png
+    sources:
+      - type: dir
+        path: source

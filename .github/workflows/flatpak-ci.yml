@@ -1,0 +1,113 @@
+name: Flatpak CI
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      run-id:
+        description: GitHub run id that produced the Flatpak artifacts
+        value: ${{ jobs.build.outputs.run-id }}
+
+jobs:
+  build:
+    name: Build Flatpak for ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    outputs:
+      run-id: ${{ steps.expose-run-id.outputs.run_id }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-49
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Allow git operations in workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Vendor Rust dependencies
+        run: |
+          rm -rf flatpak/vendor
+          cargo generate-lockfile
+          cargo vendor --locked --versioned-dirs flatpak/vendor
+
+      - name: Stage Flatpak source directory
+        run: |
+          set -euo pipefail
+          rm -rf flatpak/source
+          mkdir -p flatpak/source
+          git ls-files -z | tar --null -T - -cf - | tar -xf - -C flatpak/source
+          cp Cargo.lock flatpak/source/Cargo.lock
+          rm -rf flatpak/source/vendor
+          cp -a flatpak/vendor flatpak/source/vendor
+          mkdir -p flatpak/source/.cargo
+          cat > flatpak/source/.cargo/config.toml <<'CFG'
+          [source.crates-io]
+          replace-with = "vendored-sources"
+
+          [source.vendored-sources]
+          directory = "vendor"
+          CFG
+
+      - name: Get app version
+        id: get_version
+        run: |
+          version=$(awk -F '"' '/^\[package\]/{p=1} p && /^version/ {print $2; exit}' Cargo.toml)
+          [ -n "$version" ] || { echo "Could not determine version from Cargo.toml" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: flatpak/me.spaceinbox.claw-screenshot.yaml
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ github.sha }}
+          build-bundle: true
+          bundle: claw-screenshot-${{ matrix.arch }}.flatpak
+          upload-artifact: false
+          run-tests: false
+          arch: ${{ matrix.arch }}
+
+      - name: Collect Flatpak bundle
+        id: collect-bundle
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          bundle=$(find . -maxdepth 1 -name '*.flatpak' -print -quit)
+          [ -n "$bundle" ] || { echo "Bundle not found" >&2; exit 1; }
+          ARCH_OUT="${{ matrix.arch }}"
+          if [ "$ARCH_OUT" = "x86_64" ]; then
+            ARCH_OUT="amd64"
+          elif [ "$ARCH_OUT" = "aarch64" ]; then
+            ARCH_OUT="arm64"
+          fi
+          dest="dist/claw-screenshot-${{ steps.get_version.outputs.version }}-${ARCH_OUT}.flatpak"
+          mv "$bundle" "$dest"
+          sha256sum "$dest" > "$dest.sha256"
+          echo "bundle_path=$dest" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claw-screenshot-${{ matrix.arch }}.flatpak
+          path: |
+            ${{ steps.collect-bundle.outputs.bundle_path }}
+            dist/claw-screenshot-*.flatpak.sha256
+          retention-days: 30
+          overwrite: true
+
+      - name: Expose workflow run id
+        id: expose-run-id
+        run: echo "run_id=$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"

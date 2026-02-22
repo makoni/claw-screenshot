@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Claw Screenshot
+Exec=claw-screenshot
+Icon=me.spaceinbox.claw-screenshot
+Terminal=false
+Categories=Utility;
+StartupNotify=true
