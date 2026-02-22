@@ -154,6 +154,7 @@ download_and_verify() {
 install_desktop_entry() {
   local bin_path="$1"
   local desktop_dir="${HOME}/.local/share/applications"
+  install_icon_assets
   mkdir -p "${desktop_dir}"
   cat > "${desktop_dir}/${PROJECT}.desktop" <<DESK
 [Desktop Entry]
@@ -167,6 +168,39 @@ StartupNotify=true
 DESK
   if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "${desktop_dir}" || true
+  fi
+}
+
+install_icon_assets() {
+  local icon_root="${HOME}/.local/share/icons/hicolor"
+  local ref="${TAG:-main}"
+  local installed=0
+  local size
+
+  for size in 16 32 48 64 128 256 512; do
+    local icon_dir="${icon_root}/${size}x${size}/apps"
+    local url="https://raw.githubusercontent.com/${OWNER}/${REPO}/${ref}/installer/icons/hicolor/${size}x${size}/apps/${PROJECT}.png"
+    mkdir -p "${icon_dir}"
+    if curl -fsSL -o "${icon_dir}/${PROJECT}.png" "${url}"; then
+      installed=1
+    fi
+  done
+
+  if [ "${installed}" -eq 0 ] && [ "${ref}" != "main" ]; then
+    for size in 16 32 48 64 128 256 512; do
+      local icon_dir="${icon_root}/${size}x${size}/apps"
+      local url="https://raw.githubusercontent.com/${OWNER}/${REPO}/main/installer/icons/hicolor/${size}x${size}/apps/${PROJECT}.png"
+      mkdir -p "${icon_dir}"
+      if curl -fsSL -o "${icon_dir}/${PROJECT}.png" "${url}"; then
+        installed=1
+      fi
+    done
+  fi
+
+  if [ "${installed}" -eq 0 ]; then
+    echo "Warning: unable to install launcher icons." >&2
+  elif command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -q -t -f "${icon_root}" || true
   fi
 }
 
@@ -239,9 +273,10 @@ if [ "${USER_ONLY}" -eq 0 ]; then
   PKG="${PROJECT}-${ARCH}-${VERSION_NUM}.deb"
   if [ -n "${PKG}" ]; then
     if [ "${MANIFEST_AVAILABLE}" -eq 1 ]; then
-      SHA="$(sha_for_asset "${PKG}")"
-      if [ -n "${SHA}" ] && url_exists "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${PKG}"; then
+        SHA="$(sha_for_asset "${PKG}")"
+        if [ -n "${SHA}" ] && url_exists "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${PKG}"; then
         if try_package_install "${PKG}" "${SHA}"; then
+          install_icon_assets
           echo "Installed ${PKG} via package manager."
           exit 0
         fi
@@ -251,9 +286,10 @@ if [ "${USER_ONLY}" -eq 0 ]; then
   PKG="${PROJECT}-${ARCH}-${VERSION_NUM}.rpm"
   if [ -n "${PKG}" ]; then
     if [ "${MANIFEST_AVAILABLE}" -eq 1 ]; then
-      SHA="$(sha_for_asset "${PKG}")"
-      if [ -n "${SHA}" ] && url_exists "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${PKG}"; then
+        SHA="$(sha_for_asset "${PKG}")"
+        if [ -n "${SHA}" ] && url_exists "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${PKG}"; then
         if try_package_install "${PKG}" "${SHA}"; then
+          install_icon_assets
           echo "Installed ${PKG} via package manager."
           exit 0
         fi

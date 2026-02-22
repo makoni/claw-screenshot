@@ -24,6 +24,13 @@ chmod +x /tmp/install-claw.sh
 
 # install latest release
 /tmp/install-claw.sh
+```
+
+Installer examples and additional options:
+
+```bash
+# show installer help
+/tmp/install-claw.sh --help
 
 # install a specific version
 /tmp/install-claw.sh --version 0.1.0
@@ -32,7 +39,7 @@ chmod +x /tmp/install-claw.sh
 /tmp/install-claw.sh --user
 ```
 
-The script auto-detects arch/OS, prefers .deb/.rpm with sudo, and falls back to a tarball in ~/.local/bin. It also creates the .desktop entry.
+The script auto-detects arch/OS, prefers .deb/.rpm with sudo, and falls back to a tarball in ~/.local/bin. It also creates the .desktop entry and installs launcher icons.
 
 Build from source (requires Rust toolchain):
 
@@ -49,6 +56,7 @@ Or copy the prebuilt binary to `~/.local/bin/claw-screenshot`.
 Run the binary to request and save a screenshot. The command prints the saved path on success.
 
 ```bash
+~/.local/bin/claw-screenshot --help
 ~/.local/bin/claw-screenshot
 # Example output:
 # Saved screenshot: /home/you/Pictures/Screenshot-2026-02-03-1030.png

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use zbus::zvariant::Value;
 
-use crate::extract_uri_from_map;
+use crate::{extract_uri_from_map, parse_cli_args};
 
 #[test]
 fn test_uri_direct() {
@@ -38,4 +38,16 @@ fn test_nested_array() {
         extract_uri_from_map(&m).as_deref(),
         Some("file:///tmp/s3.png")
     );
+}
+
+#[test]
+fn test_help_argument() {
+    let args = vec!["--help".to_string()];
+    assert_eq!(parse_cli_args(&args), Ok(true));
+}
+
+#[test]
+fn test_unknown_argument_errors() {
+    let args = vec!["--nope".to_string()];
+    assert!(parse_cli_args(&args).is_err());
 }

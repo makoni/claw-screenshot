@@ -57,8 +57,10 @@ jobs:
           mkdir -p package_root/DEBIAN
           mkdir -p package_root/usr/local/bin
           mkdir -p package_root/usr/share/applications
+          mkdir -p package_root/usr/share/icons/hicolor
           BIN=target/${{ matrix.target }}/release/claw-screenshot
           cp "$BIN" package_root/usr/local/bin/
+          cp -r installer/icons/hicolor/* package_root/usr/share/icons/hicolor/
           chmod 0755 package_root/usr/local/bin/claw-screenshot
           # create DEBIAN/control
           PACKAGE_RAW=$(awk -F '"' '/^version/ {print $2; exit}' Cargo.toml)
@@ -113,7 +115,7 @@ jobs:
           fpm -s dir -t rpm -n claw-screenshot -v "$VERSION" --architecture ${{ matrix.arch }} \
             --description "Claw Screenshot helper" \
             --license MIT \
-            -C package_root usr/local/bin/claw-screenshot usr/share/applications/claw-screenshot.desktop
+            -C package_root usr/local/bin/claw-screenshot usr/share/applications/claw-screenshot.desktop usr/share/icons/hicolor
           ls -l *.rpm || true
 
       - name: Normalize package filenames

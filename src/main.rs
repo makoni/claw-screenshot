@@ -8,6 +8,29 @@ use async_std::prelude::StreamExt;
 use log::{debug, error};
 use zbus::zvariant::Value;
 
+fn parse_cli_args(args: &[String]) -> Result<bool, String> {
+    if args.is_empty() {
+        return Ok(false);
+    }
+    if args.len() == 1 && matches!(args[0].as_str(), "-h" | "--help") {
+        return Ok(true);
+    }
+    Err(format!("unknown arguments: {}", args.join(" ")))
+}
+
+fn print_help(program: &str) {
+    println!("Claw Screenshot");
+    println!();
+    println!("Usage:");
+    println!("  {program} [OPTIONS]");
+    println!();
+    println!("Options:");
+    println!("  -h, --help           Show this help message and exit");
+    println!();
+    println!("Environment:");
+    println!("  CLAW_SCREENSHOT_DIR  Save screenshots into this directory (default: ~/Pictures)");
+}
+
 fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
     // Portal responses vary; try common keys: "uri", or nested under "results" payloads.
     // Use a recursive scan of zvariant::Value instead of relying on debug output.
@@ -105,6 +128,24 @@ async fn wait_for_file_ready(
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // initialize logging (use RUST_LOG to control level, e.g. RUST_LOG=info)
     let _ = env_logger::try_init();
+
+    let argv: Vec<String> = std::env::args().collect();
+    let program = argv
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "claw-screenshot".to_string());
+    match parse_cli_args(&argv[1..]) {
+        Ok(true) => {
+            print_help(&program);
+            return Ok(());
+        }
+        Ok(false) => {}
+        Err(msg) => {
+            eprintln!("{msg}");
+            eprintln!("Try '{program} --help' for usage.");
+            return Err("invalid command line arguments".into());
+        }
+    }
 
     // Destination directory can be configured via environment variable CLAW_SCREENSHOT_DIR
     // Default: ~/Pictures
