@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use zbus::Variant;
 
-use crate::{parse_cli_args, CliAction, extract_uri_from_map};
+use crate::{CliAction, extract_uri_from_map, parse_cli_args};
 
 #[test]
 fn test_uri_direct() {
