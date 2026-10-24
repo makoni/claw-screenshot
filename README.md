@@ -83,6 +83,10 @@ To change the output directory, set `CLAW_SCREENSHOT_DIR` (the file is moved int
 CLAW_SCREENSHOT_DIR="$HOME/Screenshots" ~/.local/bin/claw-screenshot
 ```
 
+The wait timeouts are 10 seconds each by default and can be tuned with `CLAW_SCREENSHOT_RESPONSE_TIMEOUT` (portal response) and `CLAW_SCREENSHOT_FILE_TIMEOUT` (file readiness), in seconds.
+
+Exit codes: `0` — success, `1` — screenshot failed (timeout, no file, I/O error), `2` — invalid arguments.
+
 Important: on first run the system will prompt the user to allow screenshot access for the application (portal). You must accept this prompt for screenshots to be created. If you deny access, the portal will not return a file.
 
 Security note: always inspect the installer script before running it and ensure the release assets are from this repository.
