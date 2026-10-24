@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::time::Duration;
 use zbus::Variant;
 
-use crate::{CliAction, extract_uri_from_map, parse_cli_args};
+use crate::{CliAction, extract_uri_from_map, parse_cli_args, parse_timeout_secs};
 
 #[test]
 fn test_uri_direct() {
@@ -41,6 +42,20 @@ fn test_nested_array() {
         extract_uri_from_map(&m).as_deref(),
         Some("file:///tmp/s3.png")
     );
+}
+
+#[test]
+fn test_no_uri_returns_none() {
+    let mut m: HashMap<String, Variant> = HashMap::new();
+    m.insert("other".to_string(), Variant::new("no screenshot here"));
+    assert_eq!(extract_uri_from_map(&m), None);
+}
+
+#[test]
+fn test_parse_timeout_secs() {
+    assert_eq!(parse_timeout_secs("30"), Some(Duration::from_secs(30)));
+    assert_eq!(parse_timeout_secs("abc"), None);
+    assert_eq!(parse_timeout_secs(""), None);
 }
 
 #[test]

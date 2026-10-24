@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use log::{debug, error};
+use log::debug;
 use tokio::time::{sleep, timeout};
 use zbus::export::ordered_stream::OrderedStreamExt;
 use zbus::{OwnedObjectPath, Variant};
@@ -43,6 +43,12 @@ fn print_help(program: &str) {
     println!();
     println!("Environment:");
     println!("  CLAW_SCREENSHOT_DIR  Save screenshots into this directory (default: ~/Pictures)");
+    println!(
+        "  CLAW_SCREENSHOT_RESPONSE_TIMEOUT  Seconds to wait for the portal response (default: 10)"
+    );
+    println!(
+        "  CLAW_SCREENSHOT_FILE_TIMEOUT      Seconds to wait for the file to be ready (default: 10)"
+    );
     println!("  RUST_LOG             Logging details, e.g. RUST_LOG=debug");
     println!();
     println!("Note: the desktop portal grants screenshot permission on first run (or may");
@@ -54,74 +60,29 @@ fn print_version() {
 }
 
 fn extract_uri_from_map(map: &HashMap<String, Variant>) -> Option<String> {
-    // Portal responses vary; try common keys: "uri", or nested under "results" payloads.
-    // Use a recursive scan of zbus::Variant instead of relying on debug output.
-    fn find_file_uri_in_value(v: &Variant) -> Option<String> {
-        // quick debug-string fallback: some portal shapes are nested; search debug output too
-        let dbg = format!("{:?}", v);
-        if let Some(idx) = dbg.find("file://") {
-            let tail = &dbg[idx..];
-            if let Some(end) = tail.find('"') {
-                return Some(tail[..end].to_string());
-            }
-            return Some(tail.to_string());
-        }
-        match v {
-            Variant::Str(s) => {
-                if s.starts_with("file://") || s.contains("file://") {
-                    return Some(s.to_string());
-                }
-                None
-            }
-            Variant::Dict(d) => {
-                // iterate dict entries
-                for (k, val) in d.iter() {
-                    if let Some(u) = find_file_uri_in_value(k) {
-                        return Some(u);
-                    }
-                    if let Some(u) = find_file_uri_in_value(val) {
-                        return Some(u);
-                    }
-                }
-                None
-            }
-            Variant::Array(a) => {
-                for item in a.inner() {
-                    if let Some(u) = find_file_uri_in_value(item) {
-                        return Some(u);
-                    }
-                }
-                None
-            }
-            Variant::Structure(s) => {
-                for item in s.fields() {
-                    if let Some(u) = find_file_uri_in_value(item) {
-                        return Some(u);
-                    }
-                }
-                None
-            }
-            _ => None,
-        }
-    }
-
+    // The Screenshot portal returns the saved file as `uri` (a string) in the
+    // results vardict of the Response signal.
     if let Some(Variant::Str(s)) = map.get("uri") {
         return Some(s.to_string());
     }
 
-    if let Some(v) = map.get("results")
-        && let Some(u) = find_file_uri_in_value(v)
-    {
-        return Some(u);
-    }
-
-    for v in map.values() {
-        if let Some(u) = find_file_uri_in_value(v) {
-            return Some(u);
+    // Defensive fallback for portal builds that nest the file URI in other
+    // variants: scan the values for a file:// string.
+    fn find_file_uri(v: &Variant) -> Option<String> {
+        match v {
+            Variant::Str(s) => s.strip_prefix("file://").map(|_| s.to_string()),
+            // Elements of dynamic arrays are wrapped in a VARIANT.
+            Variant::Variant(inner) => find_file_uri(inner),
+            Variant::Dict(d) => d
+                .iter()
+                .find_map(|(k, val)| find_file_uri(k).or_else(|| find_file_uri(val))),
+            Variant::Array(a) => a.inner().iter().find_map(find_file_uri),
+            Variant::Structure(s) => s.fields().iter().find_map(find_file_uri),
+            _ => None,
         }
     }
 
-    None
+    map.values().find_map(find_file_uri)
 }
 
 async fn wait_for_file_ready(
@@ -146,33 +107,20 @@ async fn wait_for_file_ready(
         sleep(Duration::from_millis(200)).await;
     }
 }
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // initialize logging (use RUST_LOG to control level, e.g. RUST_LOG=info)
-    let _ = env_logger::try_init();
 
-    let argv: Vec<String> = std::env::args().collect();
-    let program = argv
-        .first()
-        .cloned()
-        .unwrap_or_else(|| "claw-screenshot".to_string());
-    match parse_cli_args(&argv[1..]) {
-        Ok(CliAction::Help) => {
-            print_help(&program);
-            return Ok(());
-        }
-        Ok(CliAction::Version) => {
-            print_version();
-            return Ok(());
-        }
-        Ok(CliAction::Run) => {}
-        Err(msg) => {
-            eprintln!("{msg}");
-            eprintln!("Try '{program} --help' for usage.");
-            return Err("invalid command line arguments".into());
-        }
-    }
+fn parse_timeout_secs(value: &str) -> Option<Duration> {
+    value.parse::<u64>().ok().map(Duration::from_secs)
+}
 
+/// Read a timeout in seconds from the environment, falling back to `default`.
+fn env_timeout(name: &str, default: Duration) -> Duration {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| parse_timeout_secs(&v))
+        .unwrap_or(default)
+}
+
+async fn run() -> Result<PathBuf, Box<dyn std::error::Error>> {
     // Destination directory can be configured via environment variable CLAW_SCREENSHOT_DIR
     // Default: ~/Pictures
     let (dst_dir, move_requested) = match std::env::var("CLAW_SCREENSHOT_DIR") {
@@ -208,6 +156,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     debug!("request object: {}", reply);
 
+    let response_timeout = env_timeout("CLAW_SCREENSHOT_RESPONSE_TIMEOUT", Duration::from_secs(10));
+    let file_timeout = env_timeout("CLAW_SCREENSHOT_FILE_TIMEOUT", Duration::from_secs(10));
+
     // Wait for the Response signal on that request object
     let mut found: Option<PathBuf> = None;
     let wait = async {
@@ -234,37 +185,79 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok::<(), Box<dyn std::error::Error>>(())
     };
 
-    match timeout(Duration::from_secs(10), wait).await {
-        Ok(result) => result?,
-        Err(_) => error!("timeout waiting for Response signal"),
-    }
-
-    if let Some(src) = found {
-        wait_for_file_ready(&src, Duration::from_secs(10)).await?;
-        let filename = src
-            .file_name()
-            .unwrap_or_else(|| std::ffi::OsStr::new("screenshot.png"));
-        let mut dst = dst_dir.clone();
-        dst.push(filename);
-        if src != dst {
-            if move_requested {
-                if let Err(err) = fs::rename(&src, &dst) {
-                    if fs::copy(&src, &dst).is_ok() {
-                        fs::remove_file(&src)?;
-                    } else {
-                        return Err(err.into());
-                    }
-                }
-            } else {
-                fs::copy(&src, &dst)?;
-            }
+    let src = match timeout(response_timeout, wait).await {
+        Ok(Ok(())) => found.ok_or("portal response contained no screenshot file")?,
+        Ok(Err(err)) => return Err(err),
+        Err(_) => {
+            return Err(format!(
+                "timed out after {}s waiting for the portal response (CLAW_SCREENSHOT_RESPONSE_TIMEOUT)",
+                response_timeout.as_secs()
+            )
+            .into())
         }
-        debug!("saved screenshot to {}", dst.display());
-        println!("Saved screenshot: {}", dst.display());
-        return Ok(());
+    };
+
+    wait_for_file_ready(&src, file_timeout).await?;
+
+    let filename = src
+        .file_name()
+        .unwrap_or_else(|| std::ffi::OsStr::new("screenshot.png"));
+    let mut dst = dst_dir.clone();
+    dst.push(filename);
+    if src != dst {
+        if move_requested {
+            if let Err(err) = fs::rename(&src, &dst) {
+                if fs::copy(&src, &dst).is_ok() {
+                    fs::remove_file(&src)?;
+                } else {
+                    return Err(err.into());
+                }
+            }
+        } else {
+            fs::copy(&src, &dst)?;
+        }
+    }
+    debug!("saved screenshot to {}", dst.display());
+    Ok(dst)
+}
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> std::process::ExitCode {
+    // initialize logging (use RUST_LOG to control level, e.g. RUST_LOG=info)
+    let _ = env_logger::try_init();
+
+    let argv: Vec<String> = std::env::args().collect();
+    let program = argv
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "claw-screenshot".to_string());
+    match parse_cli_args(&argv[1..]) {
+        Ok(CliAction::Help) => {
+            print_help(&program);
+            return std::process::ExitCode::SUCCESS;
+        }
+        Ok(CliAction::Version) => {
+            print_version();
+            return std::process::ExitCode::SUCCESS;
+        }
+        Ok(CliAction::Run) => {}
+        Err(msg) => {
+            eprintln!("{msg}");
+            eprintln!("Try '{program} --help' for usage.");
+            return std::process::ExitCode::from(2);
+        }
     }
 
-    Err("no screenshot found after request".into())
+    match run().await {
+        Ok(dst) => {
+            println!("Saved screenshot: {}", dst.display());
+            std::process::ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("claw-screenshot: {err}");
+            std::process::ExitCode::FAILURE
+        }
+    }
 }
 
 #[cfg(test)]
