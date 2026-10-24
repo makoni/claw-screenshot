@@ -7,7 +7,8 @@ Guidance for AI agents (and humans) working in this repository.
 - Build (debug): `cargo build`
 - Run tests: `cargo test`
 - Run a single test: `cargo test test_uri_direct`
-- Lint: no dedicated lint task in CI; run `cargo clippy` locally.
+- Lint: `cargo clippy --all-targets -- -D warnings` (CI runs clippy and `cargo fmt --check`).
+- Format: `cargo fmt` before committing; MSRV is pinned via `rust-version` in Cargo.toml.
 
 ## High-level architecture
 - Single-binary Rust CLI (`src/main.rs`) that calls the FreeDesktop Screenshot portal over D-Bus (`org.freedesktop.portal.Screenshot`) using zbus, waits for the `Response` signal, and copies/moves the returned temp file into a local destination directory.

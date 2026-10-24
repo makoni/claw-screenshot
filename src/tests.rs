@@ -32,7 +32,10 @@ fn test_nested_array() {
     let mut m: HashMap<String, Variant> = HashMap::new();
     m.insert(
         "results".to_string(),
-        Variant::new(vec![Variant::new("foo"), Variant::new("file:///tmp/s3.png")]),
+        Variant::new(vec![
+            Variant::new("foo"),
+            Variant::new("file:///tmp/s3.png"),
+        ]),
     );
     assert_eq!(
         extract_uri_from_map(&m).as_deref(),
