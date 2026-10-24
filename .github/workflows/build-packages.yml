@@ -136,25 +136,6 @@ jobs:
           fi
           ls -l || true
 
-      - name: Build artifacts manifest
-        run: |
-          MANIFEST=artifacts-manifest.json
-          echo '{"artifacts": [' > "$MANIFEST"
-          first=1
-          for f in *.deb *.rpm; do
-            [ -f "$f" ] || continue
-            base=$(basename "$f")
-            sha="$(sha256sum "$f" | awk '{print $1}')"
-            if [ "$first" -eq 1 ]; then
-              first=0
-            else
-              echo ',' >> "$MANIFEST"
-            fi
-            printf '{"file":"%s","sha256":"%s"}' "$base" "$sha" >> "$MANIFEST"
-          done
-          echo ']}' >> "$MANIFEST"
-          cat "$MANIFEST"
-
       - name: Upload .deb artifact (if present)
         if: ${{ always() && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) }}
         uses: actions/upload-artifact@v4
@@ -162,7 +143,6 @@ jobs:
           name: claw-screenshot-${{ matrix.arch }}.deb
           path: |
             claw-screenshot-${{ matrix.arch }}-*.deb
-            artifacts-manifest.json
           retention-days: 30
           overwrite: true
 
@@ -173,7 +153,6 @@ jobs:
           name: claw-screenshot-${{ matrix.arch }}.rpm
           path: |
             claw-screenshot-${{ matrix.arch }}-*.rpm
-            artifacts-manifest.json
           retention-days: 30
           overwrite: true
 
