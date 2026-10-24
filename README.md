@@ -86,7 +86,7 @@ Capture a specific target instead of the whole screen (the portal shows its own 
 ~/.local/bin/claw-screenshot --active-window # the currently active window
 ```
 
-Target capture uses the `target` option of the Screenshot portal interface version 3, which the portal must advertise via the `AvailableTargets` property. If your desktop's portal does not support the requested target (most current backends do not yet), the tool exits with an error instead of silently taking a full-screen shot.
+Target capture uses the `target` option of the Screenshot portal interface version 3, which the portal must advertise via the `AvailableTargets` property. If your desktop's portal does not support the requested target (this is a new, v3-only feature that most backends have not implemented yet), the tool exits with an error instead of silently taking a full-screen shot.
 
 To change the output directory, set `CLAW_SCREENSHOT_DIR` (the file is moved into that directory):
 

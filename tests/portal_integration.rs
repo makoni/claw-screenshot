@@ -22,8 +22,9 @@ const REQUEST_PATH: &str = "/org/freedesktop/portal/desktop/request/_12345/mock_
 const ALL_TARGETS: u32 = 0b1_111;
 
 struct MockPortal {
-    /// The v3 `AvailableTargets` bitmask the mock advertises.
-    available_targets: u32,
+    /// The v3 `AvailableTargets` bitmask the mock advertises; `None`
+    /// emulates a pre-v3 portal that has no such property at all.
+    available_targets: Option<u32>,
     /// Whether the binary called the Screenshot method.
     called: Arc<AtomicBool>,
     /// The `target` option the Screenshot call carried (None until called).
@@ -34,10 +35,11 @@ struct MockPortal {
 
 #[zbus::interface(name = "org.freedesktop.portal.Screenshot")]
 impl MockPortal {
-    /// The v3 `AvailableTargets` property.
+    /// The v3 `AvailableTargets` property (a D-Bus error when absent).
     #[zbus(property, name = "AvailableTargets")]
-    fn available_targets(&self) -> u32 {
+    fn available_targets(&self) -> Result<u32, fdo::Error> {
         self.available_targets
+            .ok_or_else(|| fdo::Error::NotSupported("not a v3 portal".to_string()))
     }
 
     /// The portal `Screenshot` method; the mock records the options it was
@@ -111,17 +113,20 @@ struct FlowResult {
     dst_dir: PathBuf,
 }
 
+/// Unique per-run suffix for the working directory: the tests share one
+/// process (hence one PID), so a counter guarantees uniqueness even if two
+/// runs sample the clock within the same nanosecond.
+static WORK_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 /// Run the binary against a mock portal that advertises `available_targets`
-/// and report what happened. Returns `None` when `dbus-daemon` is missing.
-async fn run_flow(available_targets: u32, cli_args: &[&str]) -> Option<FlowResult> {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
+/// (`None` emulates a pre-v3 portal without the property) and report what
+/// happened. Returns `None` when `dbus-daemon` is missing.
+async fn run_flow(available_targets: Option<u32>, cli_args: &[&str]) -> Option<FlowResult> {
+    let seq = WORK_COUNTER.fetch_add(1, Ordering::SeqCst);
     let work = std::env::temp_dir().join(format!(
         "claw-screenshot-integration-{}-{}",
         std::process::id(),
-        nanos
+        seq
     ));
 
     // The bus daemon must be spawned and read from on a worker thread:
@@ -249,7 +254,7 @@ async fn run_flow(available_targets: u32, cli_args: &[&str]) -> Option<FlowResul
 /// when `dbus-daemon` is not available, otherwise runs `assert_fn` on the
 /// outcome.
 async fn run_scenario(
-    available_targets: u32,
+    available_targets: Option<u32>,
     cli_args: &[&str],
     mut assert_fn: impl FnMut(FlowResult),
 ) {
@@ -262,7 +267,7 @@ async fn run_scenario(
 
 #[tokio::test]
 async fn screenshot_flow_with_mock_portal() {
-    run_scenario(ALL_TARGETS, &[], |r| {
+    run_scenario(Some(ALL_TARGETS), &[], |r| {
         assert!(
             r.exit_code.is_none_or(|c| c == 0),
             "binary failed (exit {:?}): {}",
@@ -296,7 +301,7 @@ async fn screenshot_flow_with_mock_portal() {
 
 #[tokio::test]
 async fn screenshot_with_window_target() {
-    run_scenario(ALL_TARGETS, &["--window"], |r| {
+    run_scenario(Some(ALL_TARGETS), &["--window"], |r| {
         assert!(
             r.exit_code.is_none_or(|c| c == 0),
             "binary failed (exit {:?}): {}",
@@ -330,10 +335,36 @@ async fn screenshot_with_window_target() {
 }
 
 #[tokio::test]
+async fn screenshot_with_active_window_target() {
+    run_scenario(Some(ALL_TARGETS), &["--active-window"], |r| {
+        assert!(
+            r.exit_code.is_none_or(|c| c == 0),
+            "binary failed (exit {:?}): {}",
+            r.exit_code,
+            r.stderr
+        );
+        assert!(
+            r.saved_exists,
+            "screenshot was not saved to the destination"
+        );
+
+        // The binary must have sent the ActiveWindow target bit (8).
+        assert!(r.called, "the binary never called the Screenshot method");
+        assert_eq!(r.target, Some(8), "unexpected target sent");
+        assert_eq!(
+            r.option_count, 1,
+            "unexpected number of options sent to Screenshot: {}",
+            r.option_count
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn unsupported_target_reports_error() {
     // The portal advertises Screen (1) only; --area (bit 4) must be refused
     // before any Screenshot call is made.
-    run_scenario(0b0001, &["--area"], |r| {
+    run_scenario(Some(0b0001), &["--area"], |r| {
         assert_eq!(
             r.exit_code,
             Some(1),
@@ -343,6 +374,32 @@ async fn unsupported_target_reports_error() {
         assert!(
             r.stderr.contains("area capture is not supported"),
             "unexpected stderr: {}",
+            r.stderr
+        );
+        assert!(!r.called, "the binary called Screenshot despite no support");
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn v2_portal_without_property_reports_error() {
+    // A pre-v3 portal has no AvailableTargets property at all; the binary
+    // must fail with a clear error and never call Screenshot.
+    run_scenario(None, &["--window"], |r| {
+        assert_eq!(
+            r.exit_code,
+            Some(1),
+            "binary should exit 1 for a v2 portal, stderr: {}",
+            r.stderr
+        );
+        assert!(
+            r.stderr.contains("window capture is not supported"),
+            "unexpected stderr: {}",
+            r.stderr
+        );
+        assert!(
+            r.stderr.contains("AvailableTargets"),
+            "error should mention the missing property, stderr: {}",
             r.stderr
         );
         assert!(!r.called, "the binary called Screenshot despite no support");

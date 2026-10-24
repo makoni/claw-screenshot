@@ -203,13 +203,22 @@ async fn build_screenshot_options(
         Ok(v) => v,
         Err(err) => {
             return Err(format!(
-                "{} capture is not supported by the portal: no AvailableTargets \
-                 property (requires interface version 3): {err}",
+                "{} capture is not supported by the portal: could not read the \
+                 AvailableTargets property (requires Screenshot interface \
+                 version 3): {err}",
                 target.label()
             )
             .into());
         }
     };
+    if available == 0 {
+        return Err(format!(
+            "{} capture is not supported by the portal: it advertises no \
+             screenshot targets",
+            target.label()
+        )
+        .into());
+    }
     if available & bit != bit {
         return Err(format!(
             "{} capture is not supported by the portal: AvailableTargets = {available:#b}",
