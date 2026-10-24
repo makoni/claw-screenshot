@@ -8,24 +8,66 @@ use tokio::time::{sleep, timeout};
 use zbus::export::ordered_stream::OrderedStreamExt;
 use zbus::{OwnedObjectPath, Variant};
 
-#[derive(Debug, PartialEq, Eq)]
-enum CliAction {
-    Run,
-    Help,
-    Version,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScreenshotTarget {
+    /// A window picked by the portal (target bit 2, interface v3).
+    Window,
+    /// An area picked by the portal (target bit 4, interface v3).
+    Area,
+    /// The currently active window (target bit 8, interface v3).
+    ActiveWindow,
 }
 
-fn parse_cli_args(args: &[String]) -> Result<CliAction, String> {
-    if args.is_empty() {
-        return Ok(CliAction::Run);
+impl ScreenshotTarget {
+    /// The `target` bit this selection maps to per the Screenshot spec v3.
+    fn bit(self) -> u32 {
+        match self {
+            ScreenshotTarget::Window => 2,
+            ScreenshotTarget::Area => 4,
+            ScreenshotTarget::ActiveWindow => 8,
+        }
     }
-    if args.len() == 1 && matches!(args[0].as_str(), "-h" | "--help") {
-        return Ok(CliAction::Help);
+
+    /// Human-readable name for error messages.
+    fn label(self) -> &'static str {
+        match self {
+            ScreenshotTarget::Window => "window",
+            ScreenshotTarget::Area => "area",
+            ScreenshotTarget::ActiveWindow => "active window",
+        }
     }
-    if args.len() == 1 && matches!(args[0].as_str(), "-V" | "--version") {
-        return Ok(CliAction::Version);
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct CliArgs {
+    help: bool,
+    version: bool,
+    target: Option<ScreenshotTarget>,
+}
+
+fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
+    let mut parsed = CliArgs::default();
+    for arg in args {
+        match arg.as_str() {
+            "-h" | "--help" => parsed.help = true,
+            "-V" | "--version" => parsed.version = true,
+            flag => {
+                let target = match flag {
+                    "--window" => Some(ScreenshotTarget::Window),
+                    "--area" => Some(ScreenshotTarget::Area),
+                    "--active-window" => Some(ScreenshotTarget::ActiveWindow),
+                    _ => return Err(format!("unknown argument: {flag}")),
+                };
+                if parsed.target.is_some() {
+                    return Err(
+                        "only one of --window, --area, --active-window is allowed".to_string()
+                    );
+                }
+                parsed.target = target;
+            }
+        }
     }
-    Err(format!("unknown arguments: {}", args.join(" ")))
+    Ok(parsed)
 }
 
 fn print_help(program: &str) {
@@ -40,6 +82,13 @@ fn print_help(program: &str) {
     println!("Options:");
     println!("  -h, --help           Show this help message and exit");
     println!("  -V, --version        Print version information and exit");
+    println!("  --window             Capture a window selected by the portal");
+    println!("  --area               Capture an area selected by the portal");
+    println!("  --active-window      Capture the currently active window");
+    println!();
+    println!("Target capture requires a portal that implements the Screenshot interface");
+    println!("version 3 (it advertises the AvailableTargets property); otherwise the");
+    println!("tool reports that the target is not supported.");
     println!();
     println!("Environment:");
     println!("  CLAW_SCREENSHOT_DIR  Save screenshots into this directory (default: ~/Pictures)");
@@ -137,7 +186,43 @@ fn env_timeout(name: &str, default: Duration) -> Duration {
     }
 }
 
-async fn run() -> Result<PathBuf, Box<dyn std::error::Error>> {
+/// Build the options vardict for the Screenshot call, checking that the
+/// portal advertises the requested capture target (interface v3).
+async fn build_screenshot_options(
+    proxy: &zbus::Proxy<'_>,
+    target: Option<ScreenshotTarget>,
+) -> Result<HashMap<String, Variant<'static>>, Box<dyn std::error::Error>> {
+    let mut options: HashMap<String, Variant<'static>> = HashMap::new();
+    let Some(target) = target else {
+        return Ok(options);
+    };
+    let bit = target.bit();
+    // `target` and `AvailableTargets` were added in interface version 3;
+    // older portals simply do not expose the property.
+    let available = match proxy.get_property::<u32>("AvailableTargets").await {
+        Ok(v) => v,
+        Err(err) => {
+            return Err(format!(
+                "{} capture is not supported by the portal: no AvailableTargets \
+                 property (requires interface version 3): {err}",
+                target.label()
+            )
+            .into());
+        }
+    };
+    if available & bit != bit {
+        return Err(format!(
+            "{} capture is not supported by the portal: AvailableTargets = {available:#b}",
+            target.label()
+        )
+        .into());
+    }
+    // A single target value, not a bitmask, per the spec.
+    options.insert("target".to_string(), Variant::new(bit));
+    Ok(options)
+}
+
+async fn run(target: Option<ScreenshotTarget>) -> Result<PathBuf, Box<dyn std::error::Error>> {
     // Destination directory can be configured via environment variable CLAW_SCREENSHOT_DIR
     // Default: ~/Pictures
     let (dst_dir, move_requested) = match std::env::var("CLAW_SCREENSHOT_DIR") {
@@ -168,9 +253,9 @@ async fn run() -> Result<PathBuf, Box<dyn std::error::Error>> {
     )
     .await?;
 
-    let reply: OwnedObjectPath = proxy
-        .call("Screenshot", &("", HashMap::<&str, Variant>::new()))
-        .await?;
+    let options = build_screenshot_options(&proxy, target).await?;
+
+    let reply: OwnedObjectPath = proxy.call("Screenshot", &("", options)).await?;
     debug!("request object: {}", reply);
 
     let response_timeout = env_timeout("CLAW_SCREENSHOT_RESPONSE_TIMEOUT", Duration::from_secs(10));
@@ -248,24 +333,24 @@ async fn main() -> std::process::ExitCode {
         .first()
         .cloned()
         .unwrap_or_else(|| "claw-screenshot".to_string());
-    match parse_cli_args(&argv[1..]) {
-        Ok(CliAction::Help) => {
-            print_help(&program);
-            return std::process::ExitCode::SUCCESS;
-        }
-        Ok(CliAction::Version) => {
-            print_version();
-            return std::process::ExitCode::SUCCESS;
-        }
-        Ok(CliAction::Run) => {}
+    let args = match parse_cli_args(&argv[1..]) {
+        Ok(args) => args,
         Err(msg) => {
             eprintln!("{msg}");
             eprintln!("Try '{program} --help' for usage.");
             return std::process::ExitCode::from(2);
         }
+    };
+    if args.help {
+        print_help(&program);
+        return std::process::ExitCode::SUCCESS;
+    }
+    if args.version {
+        print_version();
+        return std::process::ExitCode::SUCCESS;
     }
 
-    match run().await {
+    match run(args.target).await {
         Ok(dst) => {
             println!("Saved screenshot: {}", dst.display());
             std::process::ExitCode::SUCCESS
