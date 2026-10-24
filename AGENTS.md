@@ -15,6 +15,7 @@ Guidance for AI agents (and humans) working in this repository.
 - Screenshot result parsing is centralized in `extract_uri_from_map`: it reads the `uri` key from the response results (per the portal spec), with a defensive recursive scan of `zbus::Variant` values as fallback — never parsing Debug output.
 - Destination directory defaults to the XDG pictures dir (usually `~/Pictures`) and can be overridden with `CLAW_SCREENSHOT_DIR`. If neither can be resolved, the app errors out with a hint to set `CLAW_SCREENSHOT_DIR` — there are no hardcoded fallback paths.
 - When `CLAW_SCREENSHOT_DIR` is set the file is moved (rename, with copy+remove fallback); for the default directory it is copied, leaving the portal's temp file in place.
+- Target capture (`--window`/`--area`/`--active-window`) uses the `target` option of the Screenshot portal interface v3 (bits 2/4/8). Before calling, `build_screenshot_options` reads the `AvailableTargets` property and errors out if the requested bit is not advertised (or the property is absent) — it never silently downgrades to a full-screen shot. The `target` option is a single value, not a bitmask, per the spec.
 
 ## Key conventions
 - Portal responses are handled via async signal stream with a timeout (default 10s, `CLAW_SCREENSHOT_RESPONSE_TIMEOUT`), and the returned file is additionally polled for readiness (default 10s, `CLAW_SCREENSHOT_FILE_TIMEOUT`); if no file is found, the app returns an error rather than silently succeeding.

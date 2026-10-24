@@ -13,6 +13,7 @@
 ## Features
 - Requests a screenshot using `org.freedesktop.portal.Screenshot` (works with GNOME / Wayland portals).
 - Waits for the portal response and saves the screenshot into `~/Pictures`.
+- Optional target capture: `--window`, `--area`, `--active-window` (portal interface v3, with capability detection).
 
 ## Installation
 Installer script (recommended):
@@ -76,6 +77,16 @@ Run the binary to request and save a screenshot. The command prints the saved pa
 # Example output:
 # Saved screenshot: /home/you/Pictures/Screenshot-2026-02-03-1030.png
 ```
+
+Capture a specific target instead of the whole screen (the portal shows its own selection UI):
+
+```bash
+~/.local/bin/claw-screenshot --window        # a window selected by the portal
+~/.local/bin/claw-screenshot --area          # an area selected by the portal
+~/.local/bin/claw-screenshot --active-window # the currently active window
+```
+
+Target capture uses the `target` option of the Screenshot portal interface version 3, which the portal must advertise via the `AvailableTargets` property. If your desktop's portal does not support the requested target (this is a new, v3-only feature that most backends have not implemented yet), the tool exits with an error instead of silently taking a full-screen shot.
 
 To change the output directory, set `CLAW_SCREENSHOT_DIR` (the file is moved into that directory):
 

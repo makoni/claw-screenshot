@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use zbus::Variant;
 
-use crate::{CliAction, extract_uri_from_map, parse_cli_args, parse_timeout_secs};
+use crate::{CliArgs, ScreenshotTarget, extract_uri_from_map, parse_cli_args, parse_timeout_secs};
 
 #[test]
 fn test_uri_direct() {
@@ -97,14 +97,14 @@ fn test_parse_timeout_secs() {
 
 #[test]
 fn test_no_arguments_runs() {
-    assert_eq!(parse_cli_args(&[]), Ok(CliAction::Run));
+    assert_eq!(parse_cli_args(&[]), Ok(CliArgs::default()));
 }
 
 #[test]
 fn test_help_argument() {
     for flag in ["-h", "--help"] {
         let args = vec![flag.to_string()];
-        assert_eq!(parse_cli_args(&args), Ok(CliAction::Help));
+        assert!(parse_cli_args(&args).unwrap().help);
     }
 }
 
@@ -112,18 +112,52 @@ fn test_help_argument() {
 fn test_version_argument() {
     for flag in ["-V", "--version"] {
         let args = vec![flag.to_string()];
-        assert_eq!(parse_cli_args(&args), Ok(CliAction::Version));
+        assert!(parse_cli_args(&args).unwrap().version);
     }
+}
+
+#[test]
+fn test_window_argument() {
+    let args = vec!["--window".to_string()];
+    assert_eq!(
+        parse_cli_args(&args).unwrap().target,
+        Some(ScreenshotTarget::Window)
+    );
+}
+
+#[test]
+fn test_area_argument() {
+    let args = vec!["--area".to_string()];
+    assert_eq!(
+        parse_cli_args(&args).unwrap().target,
+        Some(ScreenshotTarget::Area)
+    );
+}
+
+#[test]
+fn test_active_window_argument() {
+    let args = vec!["--active-window".to_string()];
+    assert_eq!(
+        parse_cli_args(&args).unwrap().target,
+        Some(ScreenshotTarget::ActiveWindow)
+    );
+}
+
+#[test]
+fn test_target_bits() {
+    assert_eq!(ScreenshotTarget::Window.bit(), 2);
+    assert_eq!(ScreenshotTarget::Area.bit(), 4);
+    assert_eq!(ScreenshotTarget::ActiveWindow.bit(), 8);
+}
+
+#[test]
+fn test_two_targets_rejected() {
+    let args = vec!["--window".to_string(), "--area".to_string()];
+    assert!(parse_cli_args(&args).is_err());
 }
 
 #[test]
 fn test_unknown_argument_errors() {
     let args = vec!["--nope".to_string()];
-    assert!(parse_cli_args(&args).is_err());
-}
-
-#[test]
-fn test_multiple_arguments_error() {
-    let args = vec!["-h".to_string(), "extra".to_string()];
     assert!(parse_cli_args(&args).is_err());
 }
