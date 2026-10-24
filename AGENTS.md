@@ -11,7 +11,7 @@ Guidance for AI agents (and humans) working in this repository.
 
 ## High-level architecture
 - Single-binary Rust CLI (`src/main.rs`) that calls the FreeDesktop Screenshot portal over D-Bus (`org.freedesktop.portal.Screenshot`) using zbus, waits for the `Response` signal, and copies/moves the returned temp file into a local destination directory.
-- Screenshot result parsing is centralized in `extract_uri_from_map`, which recursively scans `zbus::zvariant::Value` payloads to find a `file://` URI.
+- Screenshot result parsing is centralized in `extract_uri_from_map`, which recursively scans `zbus::Variant` payloads to find a `file://` URI.
 - Destination directory defaults to the XDG pictures dir (usually `~/Pictures`) and can be overridden with `CLAW_SCREENSHOT_DIR`. If neither can be resolved, the app errors out with a hint to set `CLAW_SCREENSHOT_DIR` — there are no hardcoded fallback paths.
 - When `CLAW_SCREENSHOT_DIR` is set the file is moved (rename, with copy+remove fallback); for the default directory it is copied, leaving the portal's temp file in place.
 
