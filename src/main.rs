@@ -38,19 +38,51 @@ impl ScreenshotTarget {
     }
 }
 
+/// The largest delay (in seconds) accepted for `--delay`.
+const MAX_DELAY_SECS: u64 = 3600;
+
 #[derive(Debug, Default, PartialEq, Eq)]
 struct CliArgs {
     help: bool,
     version: bool,
     target: Option<ScreenshotTarget>,
+    delay: Option<u64>,
+}
+
+/// Parse a `--delay` value in seconds.
+fn parse_delay(value: &str) -> Result<u64, String> {
+    match value.parse::<u64>() {
+        Ok(secs) if secs <= MAX_DELAY_SECS => Ok(secs),
+        _ => Err(format!(
+            "invalid delay: {value:?} (expected seconds between 0 and {MAX_DELAY_SECS})"
+        )),
+    }
 }
 
 fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
     let mut parsed = CliArgs::default();
-    for arg in args {
+    let mut i = 0;
+    while i < args.len() {
+        let arg = &args[i];
         match arg.as_str() {
             "-h" | "--help" => parsed.help = true,
             "-V" | "--version" => parsed.version = true,
+            "--delay" => {
+                i += 1;
+                let Some(value) = args.get(i) else {
+                    return Err("--delay requires a value (seconds)".to_string());
+                };
+                if value.starts_with("--") {
+                    return Err(format!(
+                        "--delay requires a value (seconds), got a flag: {value}"
+                    ));
+                }
+                // A second --delay overrides the first.
+                parsed.delay = Some(parse_delay(value)?);
+            }
+            arg if let Some(value) = arg.strip_prefix("--delay=") => {
+                parsed.delay = Some(parse_delay(value)?);
+            }
             flag => {
                 let target = match flag {
                     "--window" => Some(ScreenshotTarget::Window),
@@ -66,6 +98,7 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
                 parsed.target = target;
             }
         }
+        i += 1;
     }
     Ok(parsed)
 }
@@ -85,6 +118,7 @@ fn print_help(program: &str) {
     println!("  --window             Capture a window selected by the portal");
     println!("  --area               Capture an area selected by the portal");
     println!("  --active-window      Capture the currently active window");
+    println!("  --delay <seconds>    Wait this long before taking the screenshot (0..3600)");
     println!();
     println!("Target capture requires a portal that implements the Screenshot interface");
     println!("version 3 (it advertises the AvailableTargets property); otherwise the");
@@ -332,6 +366,20 @@ async fn run(target: Option<ScreenshotTarget>) -> Result<PathBuf, Box<dyn std::e
     Ok(dst)
 }
 
+/// Pause for `secs` before taking the screenshot, printing a countdown so
+/// the user can get ready. Goes to stderr to keep stdout a clean "Saved
+/// screenshot: <path>" line for scripting.
+async fn wait_delay(secs: u64) {
+    if secs == 0 {
+        return;
+    }
+    eprintln!("Waiting {secs}s before taking the screenshot (Ctrl+C to cancel)…");
+    for remaining in (1..=secs).rev() {
+        eprintln!("{remaining}");
+        sleep(Duration::from_secs(1)).await;
+    }
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> std::process::ExitCode {
     // initialize logging (use RUST_LOG to control level, e.g. RUST_LOG=info)
@@ -357,6 +405,10 @@ async fn main() -> std::process::ExitCode {
     if args.version {
         print_version();
         return std::process::ExitCode::SUCCESS;
+    }
+
+    if let Some(secs) = args.delay {
+        wait_delay(secs).await;
     }
 
     match run(args.target).await {
