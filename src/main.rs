@@ -152,11 +152,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (dst_dir, move_requested) = match std::env::var("CLAW_SCREENSHOT_DIR") {
         Ok(dir) if !dir.trim().is_empty() => (PathBuf::from(dir), true),
         _ => {
-            let p = dirs::picture_dir().unwrap_or_else(|| {
-                let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/mak"));
-                home.push("Pictures");
-                home
-            });
+            let p = dirs::picture_dir()
+                .or_else(|| {
+                    dirs::home_dir().map(|mut h| {
+                        h.push("Pictures");
+                        h
+                    })
+                })
+                .ok_or("could not determine picture directory; set CLAW_SCREENSHOT_DIR")?;
             (p, false)
         }
     };
