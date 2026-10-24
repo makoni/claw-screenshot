@@ -58,27 +58,51 @@ fn spawn_private_bus(work_dir: &std::path::Path) -> Option<(String, std::process
     Some((line.trim().to_string(), child))
 }
 
+/// Owns the private bus daemon and its working directory; tears both down
+/// on drop so a failing test cannot leak a process or a temp dir.
+struct PrivateBus {
+    addr: String,
+    work: std::path::PathBuf,
+    daemon: std::process::Child,
+}
+
+impl Drop for PrivateBus {
+    fn drop(&mut self) {
+        let _ = self.daemon.kill();
+        let _ = self.daemon.wait();
+        let _ = std::fs::remove_dir_all(&self.work);
+    }
+}
+
 #[tokio::test]
 async fn screenshot_flow_with_mock_portal() {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
     let work = std::env::temp_dir().join(format!(
-        "claw-screenshot-integration-{}",
-        std::process::id()
+        "claw-screenshot-integration-{}-{}",
+        std::process::id(),
+        nanos
     ));
 
     // The bus daemon must be spawned and read from on a worker thread:
     // the blocking read would stall the current-thread runtime otherwise.
     let bus_work = work.clone();
     let bus = std::thread::spawn(move || spawn_private_bus(&bus_work));
-    let (addr, mut daemon) = match bus.join() {
-        Ok(Some(bus)) => bus,
+    let bus = match bus.join() {
+        Ok(Some((addr, daemon))) => PrivateBus { addr, work, daemon },
         _ => {
             eprintln!("dbus-daemon not available; skipping mock portal test");
+            let _ = std::fs::remove_dir_all(&work);
             return;
         }
     };
+    let addr = bus.addr.clone();
 
     // The fake screenshot the mock portal will point at, and the destination
     // directory the binary is asked to save into.
+    let work = bus.work.clone();
     let shot = work.join("Screenshot-mock.png");
     std::fs::create_dir_all(&work).unwrap();
     std::fs::write(&shot, b"\x89PNG fake screenshot payload").unwrap();
@@ -165,8 +189,8 @@ async fn screenshot_flow_with_mock_portal() {
         "unexpected options sent to Screenshot: {options_count}"
     );
 
-    let _ = responder.await;
-    let _ = daemon.kill();
-    let _ = daemon.wait();
-    let _ = std::fs::remove_dir_all(&work);
+    if let Err(join) = responder.await {
+        eprintln!("responder task failed: {join:?}");
+    }
+    drop(bus);
 }
