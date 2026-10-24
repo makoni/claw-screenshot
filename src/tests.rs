@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use zbus::Variant;
 
-use crate::{extract_uri_from_map, parse_cli_args};
+use crate::{parse_cli_args, CliAction, extract_uri_from_map};
 
 #[test]
 fn test_uri_direct() {
@@ -41,9 +41,24 @@ fn test_nested_array() {
 }
 
 #[test]
+fn test_no_arguments_runs() {
+    assert_eq!(parse_cli_args(&[]), Ok(CliAction::Run));
+}
+
+#[test]
 fn test_help_argument() {
-    let args = vec!["--help".to_string()];
-    assert_eq!(parse_cli_args(&args), Ok(true));
+    for flag in ["-h", "--help"] {
+        let args = vec![flag.to_string()];
+        assert_eq!(parse_cli_args(&args), Ok(CliAction::Help));
+    }
+}
+
+#[test]
+fn test_version_argument() {
+    for flag in ["-V", "--version"] {
+        let args = vec![flag.to_string()];
+        assert_eq!(parse_cli_args(&args), Ok(CliAction::Version));
+    }
 }
 
 #[test]
