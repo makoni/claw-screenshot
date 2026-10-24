@@ -3,10 +3,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use async_std::future::timeout;
-use async_std::prelude::StreamExt;
 use log::{debug, error};
-use zbus::zvariant::Value;
+use tokio::time::{sleep, timeout};
+use zbus::export::ordered_stream::OrderedStreamExt;
+use zbus::{OwnedObjectPath, Variant};
 
 fn parse_cli_args(args: &[String]) -> Result<bool, String> {
     if args.is_empty() {
@@ -31,10 +31,10 @@ fn print_help(program: &str) {
     println!("  CLAW_SCREENSHOT_DIR  Save screenshots into this directory (default: ~/Pictures)");
 }
 
-fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
+fn extract_uri_from_map(map: &HashMap<String, Variant>) -> Option<String> {
     // Portal responses vary; try common keys: "uri", or nested under "results" payloads.
-    // Use a recursive scan of zvariant::Value instead of relying on debug output.
-    fn find_file_uri_in_value(v: &Value) -> Option<String> {
+    // Use a recursive scan of zbus::Variant instead of relying on debug output.
+    fn find_file_uri_in_value(v: &Variant) -> Option<String> {
         // quick debug-string fallback: some portal shapes are nested; search debug output too
         let dbg = format!("{:?}", v);
         if let Some(idx) = dbg.find("file://") {
@@ -45,13 +45,13 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
             return Some(tail.to_string());
         }
         match v {
-            Value::Str(s) => {
+            Variant::Str(s) => {
                 if s.starts_with("file://") || s.contains("file://") {
                     return Some(s.to_string());
                 }
                 None
             }
-            Value::Dict(d) => {
+            Variant::Dict(d) => {
                 // iterate dict entries
                 for (k, val) in d.iter() {
                     if let Some(u) = find_file_uri_in_value(k) {
@@ -63,7 +63,7 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
                 }
                 None
             }
-            Value::Array(a) => {
+            Variant::Array(a) => {
                 for item in a.inner() {
                     if let Some(u) = find_file_uri_in_value(item) {
                         return Some(u);
@@ -71,7 +71,7 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
                 }
                 None
             }
-            Value::Structure(s) => {
+            Variant::Structure(s) => {
                 for item in s.fields() {
                     if let Some(u) = find_file_uri_in_value(item) {
                         return Some(u);
@@ -83,7 +83,7 @@ fn extract_uri_from_map(map: &HashMap<String, Value>) -> Option<String> {
         }
     }
 
-    if let Some(Value::Str(s)) = map.get("uri") {
+    if let Some(Variant::Str(s)) = map.get("uri") {
         return Some(s.to_string());
     }
 
@@ -121,10 +121,10 @@ async fn wait_for_file_ready(
         if start.elapsed() >= timeout {
             return Err(format!("screenshot file not ready: {}", path.display()).into());
         }
-        async_std::task::sleep(Duration::from_millis(200)).await;
+        sleep(Duration::from_millis(200)).await;
     }
 }
-#[async_std::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // initialize logging (use RUST_LOG to control level, e.g. RUST_LOG=info)
     let _ = env_logger::try_init();
@@ -177,8 +177,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
-    let reply: zbus::zvariant::OwnedObjectPath = proxy
-        .call("Screenshot", &("", HashMap::<&str, Value>::new()))
+    let reply: OwnedObjectPath = proxy
+        .call("Screenshot", &("", HashMap::<&str, Variant>::new()))
         .await?;
     debug!("request object: {}", reply);
 
@@ -195,7 +195,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut stream = request_proxy.receive_signal("Response").await?;
         while let Some(msg) = stream.next().await {
             let body = msg.body();
-            let (code, map): (u32, HashMap<String, Value>) = body.deserialize()?;
+            let (code, map): (u32, HashMap<String, Variant>) = body.deserialize()?;
             debug!("got Response signal code={} map={:?}", code, map);
             if let Some(s) = extract_uri_from_map(&map) {
                 let path = s.trim_start_matches("file://");
