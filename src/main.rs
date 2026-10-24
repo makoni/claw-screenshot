@@ -80,7 +80,11 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
                 // A second --delay overrides the first.
                 parsed.delay = Some(parse_delay(value)?);
             }
-            arg if let Some(value) = arg.strip_prefix("--delay=") => {
+            arg if arg.starts_with("--delay=") => {
+                // The guard above guarantees the prefix is present.
+                let value = arg
+                    .strip_prefix("--delay=")
+                    .expect("--delay= prefix checked in guard");
                 parsed.delay = Some(parse_delay(value)?);
             }
             flag => {
