@@ -45,8 +45,8 @@ fn print_help(program: &str) {
     println!("  CLAW_SCREENSHOT_DIR  Save screenshots into this directory (default: ~/Pictures)");
     println!("  RUST_LOG             Logging details, e.g. RUST_LOG=debug");
     println!();
-    println!("Note: on first run the desktop portal asks for screenshot permission;");
-    println!("allow the prompt or no file will be returned.");
+    println!("Note: the desktop portal grants screenshot permission on first run (or may");
+    println!("deny it for terminal launches); see the README for details.");
 }
 
 fn print_version() {

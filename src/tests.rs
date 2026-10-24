@@ -66,3 +66,9 @@ fn test_unknown_argument_errors() {
     let args = vec!["--nope".to_string()];
     assert!(parse_cli_args(&args).is_err());
 }
+
+#[test]
+fn test_multiple_arguments_error() {
+    let args = vec!["-h".to_string(), "extra".to_string()];
+    assert!(parse_cli_args(&args).is_err());
+}
