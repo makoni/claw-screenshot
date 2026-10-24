@@ -136,7 +136,6 @@ async fn run_flow(available_targets: Option<u32>, cli_args: &[&str]) -> Option<F
     let bus = match bus.join() {
         Ok(Some((addr, daemon))) => PrivateBus { addr, work, daemon },
         _ => {
-            eprintln!("dbus-daemon not available; skipping mock portal test");
             let _ = std::fs::remove_dir_all(&work);
             return None;
         }
@@ -253,16 +252,19 @@ async fn run_flow(available_targets: Option<u32>, cli_args: &[&str]) -> Option<F
 /// Run a scenario against the mock portal; skips (returns without failing)
 /// when `dbus-daemon` is not available, otherwise runs `assert_fn` on the
 /// outcome.
+/// Returns whether the scenario actually ran (false when skipped because
+/// `dbus-daemon` is missing).
 async fn run_scenario(
     available_targets: Option<u32>,
     cli_args: &[&str],
     mut assert_fn: impl FnMut(FlowResult),
-) {
+) -> bool {
     let Some(r) = run_flow(available_targets, cli_args).await else {
         eprintln!("dbus-daemon not available; skipping mock portal test");
-        return;
+        return false;
     };
     assert_fn(r);
+    true
 }
 
 #[tokio::test]
@@ -412,7 +414,7 @@ async fn delay_waits_before_capturing() {
     // The binary must pause for the requested delay, print a countdown to
     // stderr, and still complete the capture.
     let start = std::time::Instant::now();
-    run_scenario(Some(ALL_TARGETS), &["--delay", "1"], |r| {
+    let ran = run_scenario(Some(ALL_TARGETS), &["--delay", "1"], |r| {
         assert!(
             r.exit_code.is_none_or(|c| c == 0),
             "binary failed (exit {:?}): {}",
@@ -432,9 +434,10 @@ async fn delay_waits_before_capturing() {
     })
     .await;
     // A 1s sleep cannot finish in under ~900ms; this pins that the delay was
-    // actually applied (and not, e.g., parsed as 0).
+    // actually applied (and not, e.g., parsed as 0). Only meaningful when the
+    // scenario ran (not skipped for lack of dbus-daemon).
     assert!(
-        start.elapsed() >= Duration::from_millis(900),
+        !ran || start.elapsed() >= Duration::from_millis(900),
         "expected at least ~1s of delay, took {:?}",
         start.elapsed()
     );

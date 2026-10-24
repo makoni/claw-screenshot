@@ -221,6 +221,25 @@ fn test_delay_combines_with_target() {
 }
 
 #[test]
+fn test_delay_value_then_target() {
+    // The index-based loop must not consume a flag as the delay value.
+    let args = vec![
+        "--delay".to_string(),
+        "5".to_string(),
+        "--window".to_string(),
+    ];
+    let parsed = parse_cli_args(&args).unwrap();
+    assert_eq!(parsed.delay, Some(5));
+    assert_eq!(parsed.target, Some(ScreenshotTarget::Window));
+}
+
+#[test]
+fn test_delay_followed_by_flag_is_rejected() {
+    let args = vec!["--delay".to_string(), "--window".to_string()];
+    assert!(parse_cli_args(&args).is_err());
+}
+
+#[test]
 fn test_delay_last_wins() {
     let args = vec![
         "--delay".to_string(),

@@ -72,6 +72,11 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
                 let Some(value) = args.get(i) else {
                     return Err("--delay requires a value (seconds)".to_string());
                 };
+                if value.starts_with("--") {
+                    return Err(format!(
+                        "--delay requires a value (seconds), got a flag: {value}"
+                    ));
+                }
                 // A second --delay overrides the first.
                 parsed.delay = Some(parse_delay(value)?);
             }
