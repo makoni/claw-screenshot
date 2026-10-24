@@ -74,6 +74,30 @@ jobs:
           done
           ls -al release-assets
 
+      # Build the package manifest from the final collected assets so it
+      # always matches what is attached to the release (install.sh uses it
+      # to verify .deb/.rpm downloads). Generating it here avoids the
+      # per-matrix-arch manifests overwriting each other on collect.
+      - name: Build artifacts manifest
+        run: |
+          set -euo pipefail
+          MANIFEST="release-assets/artifacts-manifest.json"
+          echo '{"artifacts": [' > "$MANIFEST"
+          first=1
+          for f in release-assets/*.deb release-assets/*.rpm; do
+            [ -f "$f" ] || continue
+            base="$(basename "$f")"
+            sha="$(sha256sum "$f" | awk '{print $1}')"
+            if [ "$first" -eq 1 ]; then
+              first=0
+            else
+              echo ',' >> "$MANIFEST"
+            fi
+            printf '{"file":"%s","sha256":"%s"}' "$base" "$sha" >> "$MANIFEST"
+          done
+          echo ']}' >> "$MANIFEST"
+          cat "$MANIFEST"
+
       - name: Prepare release inputs
         id: release_vars
         run: |
