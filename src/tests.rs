@@ -52,8 +52,45 @@ fn test_no_uri_returns_none() {
 }
 
 #[test]
+fn test_file_uri_in_middle_of_string_ignored() {
+    let mut m: HashMap<String, Variant> = HashMap::new();
+    m.insert(
+        "note".to_string(),
+        Variant::new("prefix file:///tmp/x.png suffix"),
+    );
+    assert_eq!(extract_uri_from_map(&m), None);
+}
+
+#[test]
+fn test_non_file_uri_key_returned_verbatim() {
+    // The spec key is trusted as-is, even for non-file schemes.
+    let mut m: HashMap<String, Variant> = HashMap::new();
+    m.insert("uri".to_string(), Variant::new("http://example.com/x.png"));
+    assert_eq!(
+        extract_uri_from_map(&m).as_deref(),
+        Some("http://example.com/x.png")
+    );
+}
+
+#[test]
+fn test_wrapped_variant() {
+    // A VARIANT holding the URI (signature v) must be unwrapped.
+    let mut m: HashMap<String, Variant> = HashMap::new();
+    m.insert(
+        "other".to_string(),
+        Variant::new(Variant::new("file:///tmp/s4.png")),
+    );
+    assert_eq!(
+        extract_uri_from_map(&m).as_deref(),
+        Some("file:///tmp/s4.png")
+    );
+}
+
+#[test]
 fn test_parse_timeout_secs() {
     assert_eq!(parse_timeout_secs("30"), Some(Duration::from_secs(30)));
+    assert_eq!(parse_timeout_secs("0"), None);
+    assert_eq!(parse_timeout_secs("-5"), None);
     assert_eq!(parse_timeout_secs("abc"), None);
     assert_eq!(parse_timeout_secs(""), None);
 }

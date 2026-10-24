@@ -71,7 +71,8 @@ fn extract_uri_from_map(map: &HashMap<String, Variant>) -> Option<String> {
     fn find_file_uri(v: &Variant) -> Option<String> {
         match v {
             Variant::Str(s) => s.strip_prefix("file://").map(|_| s.to_string()),
-            // Elements of dynamic arrays are wrapped in a VARIANT.
+            // Values nested in a VARIANT (e.g. elements of arrays of type v)
+            // need unwrapping to reach the inner string.
             Variant::Variant(inner) => find_file_uri(inner),
             Variant::Dict(d) => d
                 .iter()
@@ -102,22 +103,38 @@ async fn wait_for_file_ready(
             }
         }
         if start.elapsed() >= timeout {
-            return Err(format!("screenshot file not ready: {}", path.display()).into());
+            return Err(format!(
+                "screenshot file not ready after {}s (CLAW_SCREENSHOT_FILE_TIMEOUT): {}",
+                timeout.as_secs(),
+                path.display()
+            )
+            .into());
         }
         sleep(Duration::from_millis(200)).await;
     }
 }
 
+/// Parse a timeout in seconds; `0` is rejected as a footgun.
 fn parse_timeout_secs(value: &str) -> Option<Duration> {
-    value.parse::<u64>().ok().map(Duration::from_secs)
+    value
+        .parse::<u64>()
+        .ok()
+        .filter(|secs| *secs > 0)
+        .map(Duration::from_secs)
 }
 
 /// Read a timeout in seconds from the environment, falling back to `default`.
 fn env_timeout(name: &str, default: Duration) -> Duration {
-    std::env::var(name)
-        .ok()
-        .and_then(|v| parse_timeout_secs(&v))
-        .unwrap_or(default)
+    match std::env::var(name) {
+        Ok(v) if !v.trim().is_empty() => match parse_timeout_secs(&v) {
+            Some(d) => d,
+            None => {
+                debug!("ignoring invalid {name}={v:?}; using default");
+                default
+            }
+        },
+        _ => default,
+    }
 }
 
 async fn run() -> Result<PathBuf, Box<dyn std::error::Error>> {
