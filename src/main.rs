@@ -8,12 +8,22 @@ use tokio::time::{sleep, timeout};
 use zbus::export::ordered_stream::OrderedStreamExt;
 use zbus::{OwnedObjectPath, Variant};
 
-fn parse_cli_args(args: &[String]) -> Result<bool, String> {
+#[derive(Debug, PartialEq, Eq)]
+enum CliAction {
+    Run,
+    Help,
+    Version,
+}
+
+fn parse_cli_args(args: &[String]) -> Result<CliAction, String> {
     if args.is_empty() {
-        return Ok(false);
+        return Ok(CliAction::Run);
     }
     if args.len() == 1 && matches!(args[0].as_str(), "-h" | "--help") {
-        return Ok(true);
+        return Ok(CliAction::Help);
+    }
+    if args.len() == 1 && matches!(args[0].as_str(), "-V" | "--version") {
+        return Ok(CliAction::Version);
     }
     Err(format!("unknown arguments: {}", args.join(" ")))
 }
@@ -21,14 +31,26 @@ fn parse_cli_args(args: &[String]) -> Result<bool, String> {
 fn print_help(program: &str) {
     println!("Claw Screenshot");
     println!();
+    println!("Take a desktop screenshot via the FreeDesktop Screenshot portal and save it");
+    println!("to your Pictures folder.");
+    println!();
     println!("Usage:");
     println!("  {program} [OPTIONS]");
     println!();
     println!("Options:");
     println!("  -h, --help           Show this help message and exit");
+    println!("  -V, --version        Print version information and exit");
     println!();
     println!("Environment:");
     println!("  CLAW_SCREENSHOT_DIR  Save screenshots into this directory (default: ~/Pictures)");
+    println!("  RUST_LOG             Logging details, e.g. RUST_LOG=debug");
+    println!();
+    println!("Note: the desktop portal grants screenshot permission on first run (or may");
+    println!("deny it for terminal launches); see the README for details.");
+}
+
+fn print_version() {
+    println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 }
 
 fn extract_uri_from_map(map: &HashMap<String, Variant>) -> Option<String> {
@@ -135,11 +157,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .cloned()
         .unwrap_or_else(|| "claw-screenshot".to_string());
     match parse_cli_args(&argv[1..]) {
-        Ok(true) => {
+        Ok(CliAction::Help) => {
             print_help(&program);
             return Ok(());
         }
-        Ok(false) => {}
+        Ok(CliAction::Version) => {
+            print_version();
+            return Ok(());
+        }
+        Ok(CliAction::Run) => {}
         Err(msg) => {
             eprintln!("{msg}");
             eprintln!("Try '{program} --help' for usage.");

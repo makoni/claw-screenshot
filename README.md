@@ -71,6 +71,7 @@ Run the binary to request and save a screenshot. The command prints the saved pa
 
 ```bash
 ~/.local/bin/claw-screenshot --help
+~/.local/bin/claw-screenshot --version
 ~/.local/bin/claw-screenshot
 # Example output:
 # Saved screenshot: /home/you/Pictures/Screenshot-2026-02-03-1030.png
