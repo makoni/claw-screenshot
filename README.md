@@ -14,6 +14,7 @@
 - Requests a screenshot using `org.freedesktop.portal.Screenshot` (works with GNOME / Wayland portals).
 - Waits for the portal response and saves the screenshot into `~/Pictures`.
 - Optional target capture: `--window`, `--area`, `--active-window` (portal interface v3, with capability detection).
+- Optional `--delay <seconds>` countdown before taking the shot.
 
 ## Installation
 Installer script (recommended):
@@ -87,6 +88,14 @@ Capture a specific target instead of the whole screen (the portal shows its own 
 ```
 
 Target capture uses the `target` option of the Screenshot portal interface version 3, which the portal must advertise via the `AvailableTargets` property. If your desktop's portal does not support the requested target (this is a new, v3-only feature that most backends have not implemented yet), the tool exits with an error instead of silently taking a full-screen shot.
+
+To get your window into place before the shot is taken, add a countdown:
+
+```bash
+~/.local/bin/claw-screenshot --delay 3
+```
+
+The tool prints a `Waiting Ns …` notice and counts down (on stderr, so stdout stays a clean `Saved screenshot: <path>` line) before requesting the screenshot. `--delay 0` (the default) takes the shot immediately.
 
 To change the output directory, set `CLAW_SCREENSHOT_DIR` (the file is moved into that directory):
 

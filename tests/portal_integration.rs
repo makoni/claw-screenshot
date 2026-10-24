@@ -406,3 +406,36 @@ async fn v2_portal_without_property_reports_error() {
     })
     .await;
 }
+
+#[tokio::test]
+async fn delay_waits_before_capturing() {
+    // The binary must pause for the requested delay, print a countdown to
+    // stderr, and still complete the capture.
+    let start = std::time::Instant::now();
+    run_scenario(Some(ALL_TARGETS), &["--delay", "1"], |r| {
+        assert!(
+            r.exit_code.is_none_or(|c| c == 0),
+            "binary failed (exit {:?}): {}",
+            r.exit_code,
+            r.stderr
+        );
+        assert!(
+            r.saved_exists,
+            "screenshot was not saved to the destination"
+        );
+        assert!(
+            r.stderr.contains("Waiting 1s before taking the screenshot"),
+            "expected a countdown notice, stderr: {}",
+            r.stderr
+        );
+        assert!(r.called, "the binary never called the Screenshot method");
+    })
+    .await;
+    // A 1s sleep cannot finish in under ~900ms; this pins that the delay was
+    // actually applied (and not, e.g., parsed as 0).
+    assert!(
+        start.elapsed() >= Duration::from_millis(900),
+        "expected at least ~1s of delay, took {:?}",
+        start.elapsed()
+    );
+}

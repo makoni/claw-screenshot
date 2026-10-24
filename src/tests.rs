@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use std::time::Duration;
 use zbus::Variant;
 
-use crate::{CliArgs, ScreenshotTarget, extract_uri_from_map, parse_cli_args, parse_timeout_secs};
+use crate::{
+    CliArgs, ScreenshotTarget, extract_uri_from_map, parse_cli_args, parse_delay,
+    parse_timeout_secs,
+};
 
 #[test]
 fn test_uri_direct() {
@@ -160,4 +163,79 @@ fn test_two_targets_rejected() {
 fn test_unknown_argument_errors() {
     let args = vec!["--nope".to_string()];
     assert!(parse_cli_args(&args).is_err());
+}
+
+#[test]
+fn test_delay_flag_value() {
+    let args = vec!["--delay".to_string(), "5".to_string()];
+    assert_eq!(parse_cli_args(&args).unwrap().delay, Some(5));
+}
+
+#[test]
+fn test_delay_equals_form() {
+    let args = vec!["--delay=7".to_string()];
+    assert_eq!(parse_cli_args(&args).unwrap().delay, Some(7));
+}
+
+#[test]
+fn test_delay_zero_is_valid() {
+    let args = vec!["--delay".to_string(), "0".to_string()];
+    assert_eq!(parse_cli_args(&args).unwrap().delay, Some(0));
+}
+
+#[test]
+fn test_delay_max_boundary() {
+    let ok = vec!["--delay".to_string(), "3600".to_string()];
+    assert_eq!(parse_cli_args(&ok).unwrap().delay, Some(3600));
+    let too_big = vec!["--delay".to_string(), "3601".to_string()];
+    assert!(parse_cli_args(&too_big).is_err());
+}
+
+#[test]
+fn test_delay_missing_value_errors() {
+    let args = vec!["--delay".to_string()];
+    assert!(parse_cli_args(&args).is_err());
+}
+
+#[test]
+fn test_delay_invalid_value_errors() {
+    for bad in ["abc", "-3", "1.5", ""] {
+        let args = vec!["--delay".to_string(), bad.to_string()];
+        assert!(
+            parse_cli_args(&args).is_err(),
+            "expected {bad:?} to be rejected"
+        );
+    }
+}
+
+#[test]
+fn test_delay_combines_with_target() {
+    let args = vec![
+        "--window".to_string(),
+        "--delay".to_string(),
+        "90".to_string(),
+    ];
+    let parsed = parse_cli_args(&args).unwrap();
+    assert_eq!(parsed.target, Some(ScreenshotTarget::Window));
+    assert_eq!(parsed.delay, Some(90));
+}
+
+#[test]
+fn test_delay_last_wins() {
+    let args = vec![
+        "--delay".to_string(),
+        "3".to_string(),
+        "--delay".to_string(),
+        "5".to_string(),
+    ];
+    assert_eq!(parse_cli_args(&args).unwrap().delay, Some(5));
+}
+
+#[test]
+fn test_parse_delay_bounds() {
+    assert_eq!(parse_delay("0"), Ok(0));
+    assert_eq!(parse_delay("3600"), Ok(3600));
+    assert!(parse_delay("3601").is_err());
+    assert!(parse_delay("abc").is_err());
+    assert!(parse_delay("-1").is_err());
 }

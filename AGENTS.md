@@ -21,6 +21,7 @@ Guidance for AI agents (and humans) working in this repository.
 - Portal responses are handled via async signal stream with a timeout (default 10s, `CLAW_SCREENSHOT_RESPONSE_TIMEOUT`), and the returned file is additionally polled for readiness (default 10s, `CLAW_SCREENSHOT_FILE_TIMEOUT`); if no file is found, the app returns an error rather than silently succeeding.
 - The core flow lives in `run()`; `main` maps failures to exit codes: 0 success, 1 screenshot failure (printed to stderr as `claw-screenshot: <message>`), 2 invalid arguments.
 - The app logs via `env_logger` (configure with `RUST_LOG=info` or similar); success is printed to stdout as `Saved screenshot: <path>`.
+- `--delay <seconds>` (0..3600, default 0) pauses before requesting the screenshot with a stderr countdown (`Waiting Ns …` then a per-second tick), keeping stdout clean for scripting; parsing is `parse_delay` (rejects non-numeric, negative, and > 3600), and the wait itself is `wait_delay`.
 - Unit tests cover portal response parsing and CLI argument parsing (`src/tests.rs`).
 - `tests/portal_integration.rs` runs the real binary against a mock Screenshot portal on a private `dbus-daemon` session bus (skipped when `dbus-daemon` is unavailable; preinstalled on GitHub runners).
 - For reliable portal permissions, run via a desktop entry (`.desktop`) as described in README/installer; direct terminal runs may be denied by the portal.
